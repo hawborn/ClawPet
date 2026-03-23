@@ -289,7 +289,7 @@ function buildTrayMenu() {
       type: 'separator'
     },
     {
-      label: '退出 Clawpet',
+      label: '退出 ClawPet',
       click: () => app.quit()
     }
   ])
@@ -906,7 +906,7 @@ function registerIpcHandlers() {
 
 function createTray() {
   tray = new Tray(createTrayImage())
-  tray.setToolTip('Clawpet')
+  tray.setToolTip('ClawPet')
   tray.setContextMenu(buildTrayMenu())
   tray.on('click', () => {
     if (isPetModuleEnabled()) {
@@ -942,7 +942,7 @@ function ensureRuntimeConfig() {
   const validation = validateAppConfig(config)
 
   validation.warnings.forEach((warning) => {
-    console.warn(`[Clawpet] Config warning: ${warning}`)
+    console.warn(`[ClawPet] Config warning: ${warning}`)
   })
 
   if (validation.errors.length > 0) {
@@ -1017,7 +1017,7 @@ async function bootRuntime() {
     })
   } else {
     fileSoulState = { ...DEFAULT_SOUL_STATE }
-    console.info('[Clawpet] SoulBridge module disabled by runtime config')
+    console.info('[ClawPet] SoulBridge module disabled by runtime config')
   }
 
   if (config.enableGatewayClient) {
@@ -1037,7 +1037,7 @@ async function bootRuntime() {
     }
     gatewaySoulState = { ...DEFAULT_SOUL_STATE }
     pushGatewaySnapshot(gatewaySnapshot)
-    console.info('[Clawpet] OpenClaw gateway module disabled by runtime config')
+    console.info('[ClawPet] OpenClaw gateway module disabled by runtime config')
   }
 
   registerIpcHandlers()
@@ -1055,7 +1055,7 @@ app.whenReady().then(async () => {
   try {
     await bootRuntime()
   } catch (error) {
-    console.error('[Clawpet] Startup failed', error)
+    console.error('[ClawPet] Startup failed', error)
     app.quit()
   }
 })
