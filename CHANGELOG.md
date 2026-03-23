@@ -126,4 +126,4 @@ AGPL v3 - 非商业开源
 - ⚠️ **破坏性变更**（breaking change）
 
 ### 贡献者
-感谢所有为 Clawpet 做出贡献的人！
+感谢所有为 ClawPet 做出贡献的人！

@@ -1,6 +1,6 @@
 # 贡献指南
 
-感谢你对 Clawpet 的兴趣！我们欢迎各种形式的贡献。
+感谢你对 ClawPet 的兴趣！我们欢迎各种形式的贡献。
 
 ## 行为准则
 
@@ -12,7 +12,7 @@
 
 ## 开源许可证
 
-Clawpet 采用 **AGPL v3 许可证**。
+ClawPet 采用 **AGPL v3 许可证**。
 
 ### 这意味着什么？
 
@@ -35,7 +35,7 @@ Clawpet 采用 **AGPL v3 许可证**。
    - 问题描述
    - 复现步骤
    - 期望行为 vs 实际行为
-   - macOS 版本、Clawpet 版本
+   - macOS 版本、ClawPet 版本
 
 ### 提议功能
 
@@ -43,7 +43,7 @@ Clawpet 采用 **AGPL v3 许可证**。
 2. 创建 issue，描述：
    - 功能目的
    - 预期用途
-   - 为什么这个功能对 Clawpet 重要
+   - 为什么这个功能对 ClawPet 重要
    - 可能的实现方向
 
 ### 提交代码
@@ -144,7 +144,7 @@ docs/
 
 ## 许可证
 
-Clawpet 采用 AGPL v3 许可证。详见 [LICENSE](LICENSE)。
+ClawPet 采用 AGPL v3 许可证。详见 [LICENSE](LICENSE)。
 
 通过贡献代码，你同意这些贡献将在 AGPL v3 许可证下发布。
 

@@ -580,7 +580,7 @@ export class PetManager {
       maximizable: false,
       fullscreenable: false,
       skipTaskbar: true,
-      title: 'Clawpet',
+      title: 'ClawPet',
       backgroundColor: '#00000000',
       webPreferences: {
         preload: join(__dirname, '../preload/index.js'),

@@ -1,12 +1,12 @@
-# Clawpet 状态事件词典
+# ClawPet 状态事件词典
 
-> 本文档定义 Clawpet 中所有状态、活动、事件的分类体系，为产品、设计、实现提供统一的语言基础。
+> 本文档定义 ClawPet 中所有状态、活动、事件的分类体系，为产品、设计、实现提供统一的语言基础。
 
 ---
 
 ## 1. 连接状态（Connection States）
 
-描述 Clawpet 与 OpenClaw Gateway 的连接状态。
+描述 ClawPet 与 OpenClaw Gateway 的连接状态。
 
 ### 1.1 状态枚举
 
@@ -327,7 +327,7 @@ function selectPetAnimation(soulStatus: SoulStatus, activityKind: ActivityKind):
 
 ## 7. 状态同步机制（State Sync）
 
-Clawpet 的各个组件如何保持状态同步。
+ClawPet 的各个组件如何保持状态同步。
 
 ### 7.1 信息流向
 

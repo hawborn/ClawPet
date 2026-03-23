@@ -1,4 +1,4 @@
-# Clawpet Roadmap
+# ClawPet Roadmap
 
 > Source of truth for delivery sequencing after `docs/CLAWPET-PRD.md`.
 > This roadmap is milestone-based, not calendar-based.
@@ -7,7 +7,7 @@
 
 ## 1. 产品目标回顾
 
-Clawpet 的主线不是“做一个更可爱的桌宠”，而是把它逐步做成：
+ClawPet 的主线不是“做一个更可爱的桌宠”，而是把它逐步做成：
 
 - **OpenClaw 的桌面化身**：让万能搭子真实住进桌面
 - **Presence Layer**：让 agent 的工作可被一眼感知
@@ -28,7 +28,7 @@ Clawpet 的主线不是“做一个更可爱的桌宠”，而是把它逐步做
 **关键词**：稳定、可信、低打扰、可常驻
 
 目标：
-让 Clawpet 从“很酷的原型”升级为“值得日常挂着的桌面入口”。
+让 ClawPet 从“很酷的原型”升级为“值得日常挂着的桌面入口”。
 
 核心问题：
 > 用户为什么要一直把它开着？
@@ -61,7 +61,7 @@ Clawpet 的主线不是“做一个更可爱的桌宠”，而是把它逐步做
 **关键词**：可配置、可扩展、可生长
 
 目标：
-让 Clawpet 从一个固定实现，成长为一个可扩展的 companion system。
+让 ClawPet 从一个固定实现，成长为一个可扩展的 companion system。
 
 核心问题：
 > 它能不能在不失焦的前提下，支持不同 companion 与更长期的生态能力？
@@ -147,9 +147,9 @@ Clawpet 的主线不是“做一个更可爱的桌宠”，而是把它逐步做
 - 跨平台优先
 
 ### 3.4 验收标准
-- 用户可以把 Clawpet 挂一整天  
+- 用户可以把 ClawPet 挂一整天  
 - 连接异常时不会无声失效  
-- 审批和结果接球可以只靠 Clawpet 完成  
+- 审批和结果接球可以只靠 ClawPet 完成  
 - 用户能通过行为区分至少 5 类关键状态  
 - control UI 打开频次开始下降  
 
@@ -231,7 +231,7 @@ Clawpet 的主线不是“做一个更可爱的桌宠”，而是把它逐步做
 
 ### 5.1 目标结果
 
-完成 P2 后，Clawpet 应该具备：
+完成 P2 后，ClawPet 应该具备：
 
 - 可配置的 companion 定义
 - 可扩展的人格和行为包
@@ -294,7 +294,7 @@ Clawpet 的主线不是“做一个更可爱的桌宠”，而是把它逐步做
 5. Companion schema 与 pack 能力  
 
 ### 为什么这么排
-因为 Clawpet 的价值递进很明确：
+因为 ClawPet 的价值递进很明确：
 
 - 没有稳定与可信，就不会常驻
 - 没有常驻，就谈不上关系感

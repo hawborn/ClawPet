@@ -1,5 +1,5 @@
 {
-  "name": "clawpet",
+  "name": "ClawPet",
   "version": "0.1.0",
   "description": "A lightweight pixel desktop pet for macOS built with Electron and Vite. Integrates with OpenClaw Gateway for agent state visualization.",
   "main": "./out/main/index.js",
