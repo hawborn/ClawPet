@@ -4,18 +4,26 @@ dist
 *.log
 .DS_Store
 
-# Catpaw 内部文件和规范
+# 内部开发工具和文件
 .catpaw/
-
-# 内部文档维护文件（不上传到 GitHub）
-docs/DOCUMENTATION-GUIDE.md
-docs/DOCUMENTATION-STATUS.md
-docs/DOCUMENTATION-STRUCTURE.md
-docs/00-START-HERE.md
-DOCUMENTATION-ORGANIZATION-REPORT.md
-
-# 其他内部文件
 skills/
 scripts/__pycache__/
 .venv/
 venv/
+
+# 内部开发文档（本地维护，不上传到 GitHub）
+FINAL-P0-REPORT.md
+OPEN_SOURCE_READY.md
+DOCUMENTATION-ORGANIZATION-REPORT.md
+docs/DOCUMENTATION-GUIDE.md
+docs/DOCUMENTATION-STATUS.md
+docs/DOCUMENTATION-STRUCTURE.md
+docs/00-START-HERE.md
+docs/QUICK-REFERENCE.md
+docs/IMPLEMENTATION-BACKLOG.md
+docs/IMPLEMENTATION-SESSION-SUMMARY.md
+docs/P0-IMPLEMENTATION-PROGRESS.md
+docs/P1-IMPLEMENTATION-START.md
+docs/PROJECT-STATUS.md
+docs/OPEN_SOURCE_CHECKLIST.md
+scripts/
