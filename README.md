@@ -1,136 +1,137 @@
 # ClawPet
 
-一个面向 macOS 的像素桌宠原型，也是 OpenClaw 的轻量桌面交互层。
+[中文](README-zh.md) | **English**
 
-ClawPet 会在桌面边缘显示一只或多只透明像素猫，用来做三件事：
+A lightweight pixel desktop pet for macOS, and a light-weight desktop interaction layer for OpenClaw.
 
-- 作为轻量的桌面陪伴
-- 可视化 OpenClaw 的运行状态
-- 承接会话切换、消息发送和审批操作
+ClawPet displays one or more transparent pixel cats on the desktop edge to do three things:
 
-> 想直接看“现在怎么用”，请先读 [PLAYBOOK.md](PLAYBOOK.md)。
+- Serve as a lightweight desktop companion
+- Visualize OpenClaw's running status
+- Bridge session switching, message sending, and approval operations
 
-## 当前形态
+> For a quick guide on how to use it, check out [PLAYBOOK.md](PLAYBOOK.md).
 
-- **平台**：macOS
-- **技术栈**：Electron + Vite + TypeScript
-- **渲染方式**：原生 Canvas
-- **集成方式**：优先连接 OpenClaw Gateway，失败时可降级到 soul bridge 文件模式
-- **项目阶段**：桌宠原型，重点在“陪伴感 + 状态感知 + 轻交互”
+## Current State
 
-## 核心能力
+- **Platform**: macOS
+- **Tech Stack**: Electron + Vite + TypeScript
+- **Rendering**: Native Canvas
+- **Integration**: Connects to OpenClaw Gateway by default, falls back to soul bridge file mode if unavailable
+- **Phase**: Desktop pet prototype, focused on "companionship + state awareness + lightweight interaction"
 
-### 桌宠本体
+## Core Features
 
-- 每只宠物对应一个独立的透明、无边框、常驻桌面的 Electron 窗口
-- 支持多宠物同时出现，并以独立窗口形式活动
-- 基于像素动画驱动的宠物状态机
-- 点击宠物可触发打招呼动作和互动气泡
-- 内置 3 种配色变体
+### Pet Mechanics
 
-**P1 新增**：
-- 每只宠物显示对应的会话信息和优先级标记
-- 任务生命周期阶段过渡动画（task-received / thinking / executing / waiting / done / failed）
-- 7 种情感状态映射（excited / focused / concerned / completed / failed 等）
-- 宠物行为与任务阶段同步
+- Each pet runs in its own transparent, frameless, always-on-top Electron window
+- Multiple pets can exist simultaneously as independent windows
+- State machine-driven pixel animation system
+- Click pet to trigger greeting action and chat bubble
+- 3 built-in color variants
 
-### 桌面交互
+**P1 New Features**:
+- Each pet displays session info and priority indicator
+- Task lifecycle phase transition animations (task-received / thinking / executing / waiting / done / failed)
+- 7 emotion states mapped (excited / focused / concerned / completed / failed, etc.)
+- Pet behavior synchronized with task stages
 
-- 菜单栏托盘支持添加宠物、移除最后一只、暂停、点击穿透、显示窗口、退出
-- 双击宠物可打开 OpenClaw 控制面板
-- 有待审批请求时可弹出独立审批浮窗
-- 支持完成、失败、长时间等待等提醒反馈
+### Desktop Interaction
 
-**P1 新增**：
-- 点击宠物可快速切换到对应的工作会话
-- 宠物优先级变化时自动调整显示顺序
+- Menu bar tray with controls: add pet, remove last pet, pause, click-through, show window, quit
+- Double-click pet to open OpenClaw control panel
+- Auto pop-up approval window for pending approvals
+- Feedback for completion, failure, and long waits
+
+**P1 New Features**:
+- Click pet to quickly switch to corresponding work session
+- Pet display order auto-adjusts with priority changes
 
 ### OpenClaw
 
-- 自动探测 `~/.openclaw/openclaw.json`
-- 直接连接本地 Gateway WebSocket
-- 读取会话列表、最近对话、presence、节点、待审批请求和运行活动
-- 发送消息到当前 session
-- 中止当前 run
-- 处理 `exec.approval.requested`
-- 将 `read / write / edit / exec / tool / job` 等活动映射到桌宠视觉反馈
+- Auto-detects `~/.openclaw/openclaw.json`
+- Direct local Gateway WebSocket connection
+- Reads sessions, recent messages, presence, nodes, pending approvals, and running activities
+- Sends messages to current session
+- Aborts current run
+- Handles `exec.approval.requested`
+- Maps `read / write / edit / exec / tool / job` activities to pet visual feedback
 
-## 内置宠物
+## Built-in Pets
 
-- 蜜桃猫
-- 薄荷猫
-- 夜空猫
+- Peach Cat
+- Mint Cat
+- Midnight Cat
 
-## 快速开始
+## Getting Started
 
-### 环境要求
+### Requirements
 
 - macOS
 - Node.js + npm
-- 如果要体验状态同步和审批交互，需要本地可用的 OpenClaw / QClaw 环境
+- (Optional) Local OpenClaw / QClaw environment for state sync and approval interaction
 
-### 开发运行
+### Development
 
 ```bash
 npm install
 npm run dev
 ```
 
-### 类型检查
+### Type Checking
 
 ```bash
 npm run check
 ```
 
-### 构建
+### Build
 
 ```bash
 npm run build
 npm run preview
 ```
 
-构建输出目录：
-
+Build output:
 - `out/main`
 - `out/preload`
 - `out/renderer`
 
-## 工作方式
+## How It Works
 
-ClawPet 本质上是一个 Electron 桌面应用，负责把 OpenClaw 的运行状态翻译成桌宠行为和桌面交互。
+ClawPet is an Electron desktop app that translates OpenClaw's running status into pet behavior and desktop interactions.
 
-### 架构分层
+### Architecture
 
-- `src/main`：Electron 主进程，负责窗口、托盘、IPC、持久化和 Gateway 连接
-- `src/preload`：安全桥接层
-- `src/renderer`：Canvas 桌宠渲染、面板 UI、审批浮窗
-- `src/shared`：主进程与渲染进程共享类型
+- `src/main`: Electron main process, handles windows, tray, IPC, persistence, and Gateway connection
+- `src/preload`: Security bridge layer
+- `src/renderer`: Canvas pet rendering, panel UI, approval window
+- `src/shared`: Shared types between main and renderer
 
-### 状态流转
+### State Flow
 
-1. ClawPet 启动
-2. 探测 OpenClaw / QClaw 配置文件
-3. 尝试连接本地 Gateway
-4. 接收会话、活动、审批等状态更新
-5. 将状态映射为宠物行为、面板内容和审批浮窗
-6. 用户交互后再把指令回传给 Gateway
+1. ClawPet starts
+2. Detects OpenClaw / QClaw config
+3. Attempts local Gateway connection
+4. Receives session, activity, and approval state updates
+5. Translates states into pet behavior, panel content, and approval windows
+6. User interactions send commands back to Gateway
 
-### 连接状态
+### Connection States
 
-ClawPet 目前支持以下连接状态：
+ClawPet supports the following connection states:
 
-- `unconfigured`：未发现 OpenClaw 配置
-- `connecting`：正在连接
-- `connected`：已连接
-- `degraded`：降级模式（使用 soul bridge）
-- `disconnected`：已断开
-- `error`：连接异常
+- `unconfigured`: OpenClaw config not found
+- `connecting`: Attempting connection
+- `connected`: Connected
+- `degraded`: Fallback mode (using soul bridge)
+- `disconnected`: Disconnected
+- `error`: Connection error
 
-## 灵魂模式与文件桥接
+## Soul Mode & File Bridge
 
-如果 Gateway 暂时不可用，ClawPet 仍然可以退回到文件桥接模式，通过 `soul-state.json` 接收状态更新。
+If Gateway is temporarily unavailable, ClawPet can fall back to file bridge mode using `soul-state.json` for state updates.
 
-支持的状态语义：
+Supported state semantics:
 
 - `idle`
 - `thinking`
@@ -139,132 +140,132 @@ ClawPet 目前支持以下连接状态：
 - `waiting`
 - `error`
 
-### 状态同步脚本
+### State Sync Script
 
-仓库提供了一个辅助脚本：
+The repo includes a helper script:
 
 ```bash
-python3 scripts/set_state.py coding "正在实现登录页重构"
-python3 scripts/set_state.py thinking "在分析数据流"
-python3 scripts/set_state.py running "正在跑测试"
-python3 scripts/set_state.py idle "待命中"
+python3 scripts/set_state.py coding "Implementing login page refactor"
+python3 scripts/set_state.py thinking "Analyzing data flow"
+python3 scripts/set_state.py running "Running tests"
+python3 scripts/set_state.py idle "Waiting"
 ```
 
-它会把状态写入 OpenClaw / QClaw workspace 对应的 `clawpet/soul-state.json`。
+It writes state to `clawpet/soul-state.json` in your OpenClaw / QClaw workspace.
 
-如果你想自定义状态文件位置，可以设置环境变量：
+To customize the state file location, set environment variable:
 
 ```bash
 export CLAWPET_SOUL_STATE_FILE=/your/path/soul-state.json
 ```
 
-## 交互说明
+## Interaction Guide
 
-- **单击宠物**：触发打招呼动作和气泡
-- **双击宠物**：打开 OpenClaw 面板
-- **审批到来时**：自动弹出独立审批浮窗
-- **菜单栏托盘**：主控制入口
-- **灵魂模式**：优先根据 OpenClaw / QClaw 状态切换行为和氛围
-- **点击穿透**：窗口不拦截鼠标，适合只做陪伴显示
-- **暂停动作**：适合开会、录屏、演示等场景
+- **Single click pet**: Trigger greeting action and chat bubble
+- **Double-click pet**: Open OpenClaw panel
+- **Approval arrives**: Auto pop-up approval window
+- **Menu bar tray**: Main control hub
+- **Soul mode**: Behavior and atmosphere based on OpenClaw / QClaw state
+- **Click-through**: Window doesn't intercept mouse, good for companion-only display
+- **Pause action**: Good for meetings, screen recording, presentations
 
-## 本地数据
+## Local Data
 
-ClawPet 会把本地状态保存在 Electron 的 `userData` 目录中。macOS 下通常位于：
+ClawPet stores local state in Electron's `userData` directory. On macOS, typically:
 
 ```bash
 ~/Library/Application Support/ClawPet/
 ```
 
-典型文件结构如下：
+Typical file structure:
 
 ```bash
 ~/Library/Application Support/ClawPet/
-├── pet-lineup.json         # 宠物布局、皮肤、位置
-├── app-state.json          # 应用设置（点击穿透、暂停、灵魂模式）
+├── pet-lineup.json         # Pet layout, skin, position
+├── app-state.json          # App settings (click-through, pause, soul mode)
 └── openclaw/
-    └── device.json         # 设备身份认证（自动生成）
+    └── device.json         # Device authentication (auto-generated)
 ```
 
-如有需要，也可以通过环境变量覆盖默认目录：
+You can override defaults with environment variables:
 
 - `CLAWPET_DATA_DIR`
 - `CLAWPET_LINEUP_FILE`
 
-## 当前版本
+## Current Version
 
-**P1 Companion Credibility ✅ 已完成（2026-03-23）**
+**P1 Companion Credibility ✅ Completed (2026-03-23)**
 
-ClawPet 现在已成为真正的"桌面搭子"，不仅是状态灯。
+ClawPet is now a true "desktop companion", not just a status light.
 
-### P1 核心升级
+### P1 Core Upgrades
 
-| 功能 | 状态 | 说明 |
-|------|------|------|
-| **CP-006 生命周期仪式感** | ✅ 完成 | 7 个生命周期阶段 + 过渡动画 + 情感映射 |
-| **CP-007 多会话宠物映射** | ✅ 完成 | 宠物代表会话 + 优先级表达 + 空间感 |
-| **CP-008 面板架构重构** | ✅ 完成 | 工作卡片中心 + 信息优先级清晰 |
-| **CP-009 统一状态语言** | ✅ 完成 | 6 个情感状态 + 颜色系统规范 + 动作映射 |
+| Feature | Status | Description |
+|---------|--------|-------------|
+| **CP-006 Lifecycle Ceremony** | ✅ Complete | 7 lifecycle stages + transition animations + emotion mapping |
+| **CP-007 Multi-Session Mapping** | ✅ Complete | Pets represent sessions + priority expression + spatial awareness |
+| **CP-008 Panel Architecture** | ✅ Complete | Task-card-centric + clear information hierarchy |
+| **CP-009 Unified State Language** | ✅ Complete | 6 emotion states + color system + action mapping |
 
-### 新增能力
+### New Capabilities
 
-- **任务有节奏**：从接收 → 思考 → 执行 → 完成的连贯过程，而不是硬切状态
-- **多会话空间感**：不同宠物代表不同会话，优先级明确，一眼看出哪个最活跃
-- **面板交接中心**：进入面板立即看到最重要的任务和待决策事项，而不是统计数据
-- **统一设计语言**：颜色、动作、文案、提醒形成一致的故事，新增功能有规范可参考
+- **Rhythmic tasks**: Coherent progression from receive → think → execute → complete, not hard state switches
+- **Multi-session spatial awareness**: Different pets represent different sessions, clear priority, see at a glance which is active
+- **Panel as decision hub**: Open panel, immediately see most important tasks and pending decisions, not statistics
+- **Unified design language**: Colors, actions, copy, and feedback form a consistent story; new features have patterns to reference
 
-### P0 产品底盘
+### P0 Product Foundation
 
-| 功能 | 状态 | 说明 |
-|------|------|------|
-| P0-1 稳定连接与恢复 | ✅ 完成 | 6 层连接状态机 + 自动重连 + 降级支持 |
-| P0-2 本地持久化 | ✅ 完成 | `clickThrough` / `paused` / `soulMode` 持久化 |
-| P0-3 细粒度状态反馈 | ✅ 完成 | 8 种活动类型映射 + 宠物行为优化 |
-| P0-4 审批浮窗增强 | ✅ 完成 | 风险等级 + 命令摘要 + 上下文展示 |
-| P0-5 完成/失败反馈 | ✅ 完成 | 完成 / 失败 / 长时间等待三类反馈 |
+| Feature | Status | Description |
+|---------|--------|-------------|
+| P0-1 Stable Connection & Recovery | ✅ Complete | 6-layer connection state machine + auto-reconnect + fallback support |
+| P0-2 Local Persistence | ✅ Complete | `clickThrough` / `paused` / `soulMode` persistence |
+| P0-3 Fine-grained State Feedback | ✅ Complete | 8 activity types mapped + pet behavior optimized |
+| P0-4 Enhanced Approval Window | ✅ Complete | Risk level + command summary + context display |
+| P0-5 Completion/Failure Feedback | ✅ Complete | 3 feedback types: completion / failure / long wait |
 
-## 下一阶段（P2）
+## Next Phase (P2)
 
-如果继续往前做，比较值得优先推进的方向有：
+If continuing forward, worthwhile priorities include:
 
-1. **CP-010 Companion Schema 外置化**：把宠物定义、动作、文案抽离为可配置资源
-2. **CP-011 人格/行为包系统**：支持不同风格宠物的差异化行为和语气
-3. **音效系统**：为每个情感状态配置音效反馈
-4. **更丰富的行为**：追随光标、定时提醒、番茄钟等互动模式
-5. **拖拽与物理**：拖拽宠物、回弹、靠边停靠等视觉交互
-6. **打包分发**：生成可安装的 `.dmg`，降低使用门槛
+1. **CP-010 Companion Schema Externalization**: Extract pet definitions, actions, text into configurable resources
+2. **CP-011 Personality/Behavior Packs**: Support different pet styles with differentiated behavior and tone
+3. **Sound System**: Sound feedback for each emotion state
+4. **Richer Behaviors**: Follow cursor, scheduled reminders, pomodoro timer, etc.
+5. **Drag & Physics**: Drag pet, bounce, dock to edge, etc.
+6. **Packaging**: Generate installable `.dmg` to lower adoption friction
 
-## 相关文档
+## Documentation
 
-📚 **完整文档导航** → [docs/INDEX.md](docs/INDEX.md)
+📚 **Complete Document Navigation** → [docs/INDEX.md](docs/INDEX.md)
 
-### 快速开始
-- [PLAYBOOK.md](PLAYBOOK.md)：当前版本推荐玩法
+### Quick Start
+- [PLAYBOOK.md](PLAYBOOK.md): Current version playbook
 
-### P1 功能文档
-- [docs/P1-COMPLETION-SUMMARY.md](docs/P1-COMPLETION-SUMMARY.md)：P1 全体完成总结
-- [docs/CP-006-LIFECYCLE-CEREMONY-COMPLETE.md](docs/CP-006-LIFECYCLE-CEREMONY-COMPLETE.md)：生命周期仪式感设计
-- [docs/CP-007-MULTI-SESSION-MAPPING.md](docs/CP-007-MULTI-SESSION-MAPPING.md)：多会话宠物映射
-- [docs/CP-008-PANEL-IA-COMPLETE.md](docs/CP-008-PANEL-IA-COMPLETE.md)：面板信息架构
-- [docs/CP-009-STATE-LANGUAGE-SPEC.md](docs/CP-009-STATE-LANGUAGE-SPEC.md)：统一状态语言规范
-- [docs/PROJECT-STATUS.md](docs/PROJECT-STATUS.md)：项目状态报告
+### P1 Feature Docs
+- [docs/P1-COMPLETION-SUMMARY.md](docs/P1-COMPLETION-SUMMARY.md): P1 completion summary
+- [docs/CP-006-LIFECYCLE-CEREMONY-COMPLETE.md](docs/CP-006-LIFECYCLE-CEREMONY-COMPLETE.md): Lifecycle ceremony design
+- [docs/CP-007-MULTI-SESSION-MAPPING.md](docs/CP-007-MULTI-SESSION-MAPPING.md): Multi-session pet mapping
+- [docs/CP-008-PANEL-IA-COMPLETE.md](docs/CP-008-PANEL-IA-COMPLETE.md): Panel information architecture
+- [docs/CP-009-STATE-LANGUAGE-SPEC.md](docs/CP-009-STATE-LANGUAGE-SPEC.md): Unified state language spec
+- [docs/PROJECT-STATUS.md](docs/PROJECT-STATUS.md): Project status report
 
-### 规划文档
-- [docs/ROADMAP.md](docs/ROADMAP.md)：产品规划与路线图
-- [docs/CLAWPET-PRD.md](docs/CLAWPET-PRD.md)：产品需求文档
-- [docs/IMPLEMENTATION-BACKLOG.md](docs/IMPLEMENTATION-BACKLOG.md)：实现待办清单
+### Planning Docs
+- [docs/ROADMAP.md](docs/ROADMAP.md): Product roadmap
+- [docs/CLAWPET-PRD.md](docs/CLAWPET-PRD.md): Product requirements document
+- [docs/STATE-TAXONOMY.md](docs/STATE-TAXONOMY.md): State taxonomy
 
-### 社区
-- [CONTRIBUTING.md](CONTRIBUTING.md)：贡献指南
-- [CHANGELOG.md](CHANGELOG.md)：版本记录
-- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)：社区行为准则
+### Community
+- [CONTRIBUTING.md](CONTRIBUTING.md): Contribution guide
+- [CHANGELOG.md](CHANGELOG.md): Changelog
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md): Code of conduct
 
-## 许可证
+## License
 
 ![AGPL v3](https://img.shields.io/badge/license-AGPL%20v3-blue.svg)
 
-ClawPet 使用 **AGPL-3.0-only** 许可证。
+ClawPet uses the **AGPL-3.0-only** license.
 
-这意味着你可以在 AGPL 条款下学习、修改和分发代码；如果你分发修改版本，或通过网络向他人提供修改后的服务，需要同时提供对应源代码。
+This means you can freely learn, modify, and share the code under AGPL terms. If you distribute modifications or provide services through network distribution, you must also provide the corresponding source code.
 
-具体条款请以 [LICENSE](LICENSE) 为准。
+For full terms, see [LICENSE](LICENSE).
