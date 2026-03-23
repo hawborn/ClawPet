@@ -1,0 +1,12 @@
+node_modules
+out
+dist
+*.log
+.DS_Store
+
+# 内部文档维护文件（不上传到 GitHub）
+docs/DOCUMENTATION-GUIDE.md
+docs/DOCUMENTATION-STATUS.md
+docs/DOCUMENTATION-STRUCTURE.md
+docs/00-START-HERE.md
+DOCUMENTATION-ORGANIZATION-REPORT.md

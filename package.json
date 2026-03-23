@@ -1,0 +1,39 @@
+{
+  "name": "clawpet",
+  "version": "0.1.0",
+  "description": "A lightweight pixel desktop pet for macOS built with Electron and Vite. Integrates with OpenClaw Gateway for agent state visualization.",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "check": "tsc --noEmit"
+  },
+  "keywords": [
+    "electron",
+    "desktop-pet",
+    "pixel-art",
+    "macos",
+    "openclaw",
+    "agent",
+    "canvas"
+  ],
+  "author": "wuhao",
+  "license": "AGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/clawpet"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/clawpet/issues"
+  },
+  "homepage": "https://github.com/yourusername/clawpet#readme",
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "electron": "^41.0.3",
+    "electron-builder": "^26.8.1",
+    "electron-vite": "^5.0.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1"
+  }
+}
