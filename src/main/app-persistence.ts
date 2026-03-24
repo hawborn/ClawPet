@@ -60,6 +60,10 @@ export async function saveAppSettings(dataDir: string, settings: AppSettings): P
     await mkdir(dataDir, { recursive: true })
     await writeFile(filePath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8')
   } catch (error) {
-    console.error('[ClawPet] Failed to save app settings:', error)
+    try {
+      console.error('[ClawPet] Failed to save app settings:', error)
+    } catch {
+      // Ignore stdio write failures to keep persistence errors non-fatal.
+    }
   }
 }

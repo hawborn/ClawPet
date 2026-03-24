@@ -1,3 +1,4 @@
+import { appendFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { app, BrowserWindow, ipcMain, Menu, Tray, nativeImage, screen } from 'electron'
@@ -75,6 +76,70 @@ const WAITING_STAGES = [
 ] as const
 
 let pendingLineupSave: NodeJS.Timeout | null = null
+
+function stringifyErrorPart(value: unknown) {
+  if (value instanceof Error) {
+    return `${value.name}: ${value.message}\n${value.stack || ''}`.trim()
+  }
+
+  if (typeof value === 'string') {
+    return value
+  }
+
+  try {
+    return JSON.stringify(value)
+  } catch {
+    return String(value)
+  }
+}
+
+function safeMainErrorLog(...parts: unknown[]) {
+  try {
+    console.error(...parts)
+    return
+  } catch {
+    // ignore console stream failures (e.g., write EIO when stdio is unavailable)
+  }
+
+  try {
+    const line = `[${new Date().toISOString()}] ${parts.map(stringifyErrorPart).join(' ')}\n`
+    appendFileSync(join(app.getPath('temp'), 'clawpet-main.log'), line, 'utf8')
+  } catch {
+    // last-resort: swallow to avoid crashing the process while reporting an error
+  }
+}
+
+function attachWindowDiagnostics(targetWindow: BrowserWindow, name: string) {
+  targetWindow.webContents.on('did-fail-load', (_event, code, description, validatedUrl, isMainFrame) => {
+    if (!isMainFrame) {
+      return
+    }
+
+    safeMainErrorLog(`[ClawPet] ${name} failed to load`, {
+      code,
+      description,
+      validatedUrl
+    })
+  })
+
+  targetWindow.webContents.on('render-process-gone', (_event, details) => {
+    safeMainErrorLog(`[ClawPet] ${name} renderer exited`, details)
+  })
+
+  targetWindow.on('unresponsive', () => {
+    safeMainErrorLog(`[ClawPet] ${name} became unresponsive`)
+  })
+}
+
+function registerProcessErrorHandlers() {
+  process.on('unhandledRejection', (reason) => {
+    safeMainErrorLog('[ClawPet] Unhandled rejection', reason)
+  })
+
+  process.on('uncaughtException', (error) => {
+    safeMainErrorLog('[ClawPet] Uncaught exception', error)
+  })
+}
 
 function createTrayImage() {
   const svg = `
@@ -327,6 +392,7 @@ function createPanelWindow() {
   })
 
   panelWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  attachWindowDiagnostics(panelWindow, 'panel window')
   loadRendererPage(panelWindow, 'view=panel')
   return panelWindow
 }
@@ -365,6 +431,7 @@ function createApprovalWindow() {
   approvalWindow.setAlwaysOnTop(true, 'floating')
   approvalWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
   approvalWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  attachWindowDiagnostics(approvalWindow, 'approval window')
   loadRendererPage(approvalWindow, 'view=approval')
   return approvalWindow
 }
@@ -1047,6 +1114,8 @@ async function bootRuntime() {
   spawnInitialLineup(storedLineup)
 }
 
+registerProcessErrorHandlers()
+
 app.whenReady().then(async () => {
   if (process.platform === 'darwin') {
     app.dock?.hide()
@@ -1055,7 +1124,7 @@ app.whenReady().then(async () => {
   try {
     await bootRuntime()
   } catch (error) {
-    console.error('[ClawPet] Startup failed', error)
+    safeMainErrorLog('[ClawPet] Startup failed', error)
     app.quit()
   }
 })

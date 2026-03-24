@@ -500,6 +500,17 @@ export class SinglePetScene {
     }
   }
 
+  private formatSessionChipLabel(sessionName: string, isHighPriority: boolean) {
+    const trimmed = sessionName.trim()
+    const normalized = trimmed.toLowerCase() === 'clawpet' ? 'ClawPet' : trimmed
+    const safeName = normalized.length > 0 ? normalized : 'Session'
+    const maxChars = 12
+    const displayName =
+      safeName.length <= maxChars ? safeName : `${safeName.slice(0, maxChars - 1)}…`
+
+    return isHighPriority ? `⚡ ${displayName}` : displayName
+  }
+
   private drawSpeechBubble(ctx: CanvasRenderingContext2D, bubbleText: string) {
     ctx.save()
     ctx.font = '12px "Avenir Next", "PingFang SC", sans-serif'
@@ -540,8 +551,8 @@ export class SinglePetScene {
 
     // P1-CP-007: 显示会话和优先级信息
     if (this.pet.sessionBinding && this.pet.priorityInfo) {
-      const priorityIcon = this.pet.priorityInfo.priority === 'high' ? '⚡' : '•'
-      chips.push(`${priorityIcon}${this.pet.sessionBinding.sessionName.slice(0, 6)}`)
+      const isHighPriority = this.pet.priorityInfo.priority === 'high'
+      chips.push(this.formatSessionChipLabel(this.pet.sessionBinding.sessionName, isHighPriority))
     } else if (gatewayActivity) {
       chips.push(`OpenClaw·${gatewayActivity.badge}`)
     } else if (this.settings.soulMode && this.soul.active && this.soul.status !== 'idle') {
