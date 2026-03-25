@@ -6,6 +6,7 @@ import { SinglePetScene } from './pet-engine'
 export class PixelPetApp {
   private readonly canvas = document.createElement('canvas')
   private readonly controls = document.createElement('div')
+  private readonly utteranceCard = document.createElement('div')
   private readonly ctx = this.canvas.getContext('2d')
   private destroySubscription: (() => void) | null = null
   private dpr = 1
@@ -19,8 +20,19 @@ export class PixelPetApp {
   private settings: AppSettings = {
     clickThrough: false,
     paused: false,
-    soulMode: true
+    soulMode: true,
+    muted: false
   }
+  private utteranceTimeout: number | null = null
+  private currentUtterance: {
+    sessionKey?: string
+    text: string
+    kind: 'approval' | 'done' | 'failed' | 'waiting' | 'progress' | 'summary'
+    priority: 'critical' | 'important' | 'normal'
+    durationMs: number
+    canCopy: boolean
+    canExpand: boolean
+  } | null = null
 
   constructor(private readonly root: HTMLDivElement) {
     this.canvas.className = 'pet-stage'
@@ -31,6 +43,8 @@ export class PixelPetApp {
       <button class="pet-control-btn" data-action="skin">换装</button>
       <button class="pet-control-btn" data-action="refresh">刷新</button>
     `
+    this.utteranceCard.className = 'utterance-card'
+    this.utteranceCard.style.display = 'none'
   }
 
   async mount() {
@@ -40,6 +54,7 @@ export class PixelPetApp {
 
     this.root.appendChild(this.canvas)
     this.root.appendChild(this.controls)
+    this.root.appendChild(this.utteranceCard)
     this.resizeCanvas()
 
     const [snapshot, gatewaySnapshot] = await Promise.all([
@@ -101,10 +116,10 @@ export class PixelPetApp {
       const point = this.toCanvasPoint(event)
       const isPetHovered = this.scene.hitTest(point.x, point.y)
       this.scene.setHovered(isPetHovered)
-      if (isPetHovered && !this.settings.clickThrough) {
+      if (isPetHovered && !this.settings.clickThrough && !this.settings.muted) {
         this.setControlsVisible(true)
       }
-      this.canvas.style.cursor = isPetHovered && !this.settings.clickThrough ? 'pointer' : 'default'
+      this.canvas.style.cursor = isPetHovered && !this.settings.clickThrough && !this.settings.muted ? 'pointer' : 'default'
     })
 
     this.canvas.addEventListener('pointerleave', () => {
@@ -114,7 +129,7 @@ export class PixelPetApp {
     })
 
     this.canvas.addEventListener('pointerdown', (event) => {
-      if (this.settings.clickThrough) {
+      if (this.settings.clickThrough || this.settings.muted) {
         return
       }
 
@@ -193,7 +208,7 @@ export class PixelPetApp {
     })
 
     this.canvas.addEventListener('dblclick', (event) => {
-      if (this.settings.clickThrough) {
+      if (this.settings.clickThrough || this.settings.muted) {
         return
       }
 
@@ -211,7 +226,7 @@ export class PixelPetApp {
       this.hideControlsTimer = null
     }
 
-    if (visible && !this.settings.clickThrough) {
+    if (visible && !this.settings.clickThrough && !this.settings.muted) {
       this.controls.classList.add('visible')
     } else {
       this.controls.classList.remove('visible')
@@ -251,7 +266,7 @@ export class PixelPetApp {
       case 'sync-settings':
         this.settings = command.settings
         this.scene.setSettings(command.settings)
-        if (this.settings.clickThrough) {
+        if (this.settings.clickThrough || this.settings.muted) {
           this.setControlsVisible(false)
         }
         break
@@ -268,6 +283,9 @@ export class PixelPetApp {
       case 'ceremony-transition':
         // P1: 处理生命周期过渡动画
         this.scene.playCeremonyTransition(command.from, command.to, command.durationMs ?? 600)
+        break
+      case 'desktop-utterance':
+        this.showUtterance(command.utterance)
         break
     }
   }
@@ -297,5 +315,96 @@ export class PixelPetApp {
     const y = ((event.clientY - bounds.top) / bounds.height) * PET_WINDOW_HEIGHT
 
     return { x, y }
+  }
+
+  private showUtterance(utterance: {
+    sessionKey?: string
+    text: string
+    kind: 'approval' | 'done' | 'failed' | 'waiting' | 'progress' | 'summary'
+    priority: 'critical' | 'important' | 'normal'
+    durationMs: number
+    canCopy: boolean
+    canExpand: boolean
+  }) {
+    if (this.utteranceTimeout) {
+      window.clearTimeout(this.utteranceTimeout)
+      this.utteranceTimeout = null
+    }
+
+    this.currentUtterance = utterance
+    this.renderUtteranceCard()
+    this.utteranceCard.style.display = 'block'
+
+    this.utteranceTimeout = window.setTimeout(() => {
+      this.hideUtterance()
+    }, utterance.durationMs)
+  }
+
+  private hideUtterance() {
+    this.utteranceCard.style.display = 'none'
+    this.currentUtterance = null
+    if (this.utteranceTimeout) {
+      window.clearTimeout(this.utteranceTimeout)
+      this.utteranceTimeout = null
+    }
+  }
+
+  private renderUtteranceCard() {
+    if (!this.currentUtterance) {
+      return
+    }
+
+    const utterance = this.currentUtterance
+    const kindEmoji = {
+      approval: '⏸️',
+      done: '✅',
+      failed: '❌',
+      waiting: '⏳',
+      progress: '🔄',
+      summary: '📋'
+    }[utterance.kind]
+
+    const priorityClass = `priority-${utterance.priority}`
+
+    this.utteranceCard.className = `utterance-card ${priorityClass}`
+    this.utteranceCard.innerHTML = `
+      <div class="utterance-header">
+        <span class="utterance-kind">${kindEmoji}</span>
+        <span class="utterance-priority">${utterance.priority}</span>
+      </div>
+      <div class="utterance-text">${this.escapeHtml(utterance.text)}</div>
+      <div class="utterance-actions">
+        ${utterance.canCopy ? '<button class="utterance-btn" data-action="copy-utterance">📋 复制</button>' : ''}
+        ${utterance.canExpand ? '<button class="utterance-btn" data-action="expand-utterance">📖 展开</button>' : ''}
+        <button class="utterance-btn" data-action="dismiss-utterance">✕ 关闭</button>
+      </div>
+    `
+
+    this.attachUtteranceEvents()
+  }
+
+  private attachUtteranceEvents() {
+    this.utteranceCard.querySelectorAll('.utterance-btn').forEach((btn) => {
+      btn.addEventListener('click', (event) => {
+        const target = event.target as HTMLElement
+        const action = target.dataset.action
+
+        if (action === 'copy-utterance' && this.currentUtterance) {
+          void window.desktopPet.copyText(this.currentUtterance.text)
+        } else if (action === 'expand-utterance') {
+          void window.desktopPet.openGatewayPanel()
+        } else if (action === 'dismiss-utterance') {
+          this.hideUtterance()
+        }
+      })
+    })
+  }
+
+  private escapeHtml(input: string): string {
+    return input
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
   }
 }

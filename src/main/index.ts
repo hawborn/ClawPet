@@ -1,7 +1,9 @@
 import { appendFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { readFile } from 'node:fs/promises'
+import { basename, extname, join } from 'node:path'
+import { randomUUID } from 'node:crypto'
 
-import { app, BrowserWindow, ipcMain, Menu, Tray, nativeImage, screen } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, Tray, nativeImage, screen } from 'electron'
 
 import {
   DEFAULT_GATEWAY_SNAPSHOT,
@@ -11,8 +13,11 @@ import {
   SOUL_STATUS_LABELS,
   TASK_LIFECYCLE_LABELS,
   TASK_LIFECYCLE_EMOTION,
+  type AppCommand,
   type AppSettings,
   type GatewayApprovalDecision,
+  type GatewayOutgoingAttachment,
+  type GatewaySendMessagePayload,
   type NotificationLevel,
   type OpenClawSnapshot,
   type PetVariantId,
@@ -59,7 +64,8 @@ const notificationThrottle = new Map<string, number>()
 const appSettings: AppSettings = {
   clickThrough: false,
   paused: false,
-  soulMode: true
+  soulMode: true,
+  muted: false
 }
 
 const APPROVAL_WINDOW_WIDTH = 360
@@ -76,6 +82,39 @@ const WAITING_STAGES = [
 ] as const
 
 let pendingLineupSave: NodeJS.Timeout | null = null
+
+interface DesktopUtterancePayload {
+  sessionKey?: string
+  text: string
+  kind: 'approval' | 'done' | 'failed' | 'waiting' | 'progress' | 'summary'
+  priority: 'critical' | 'important' | 'normal'
+  durationMs: number
+  canCopy: boolean
+  canExpand: boolean
+}
+
+const DESKTOP_UTTERANCE_FINGERPRINT_WINDOW_MS = 30_000
+const DESKTOP_UTTERANCE_PROGRESS_INTERVAL_MS = 15_000
+const IMAGE_PICK_MAX_COUNT = 4
+const IMAGE_PICK_MAX_SIZE_BYTES = 5 * 1024 * 1024
+
+const IMAGE_MIME_BY_EXTENSION: Record<string, string> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.bmp': 'image/bmp',
+  '.svg': 'image/svg+xml',
+  '.heic': 'image/heic',
+  '.heif': 'image/heif',
+  '.tif': 'image/tiff',
+  '.tiff': 'image/tiff'
+}
+
+let previousUtteranceSnapshot: OpenClawSnapshot | null = null
+const utteranceFingerprintThrottle = new Map<string, number>()
+const utteranceProgressBySession = new Map<string, number>()
 
 function stringifyErrorPart(value: unknown) {
   if (value instanceof Error) {
@@ -187,6 +226,241 @@ function shouldNotify(key: string, level: NotificationLevel): boolean {
     return true
   }
   return false
+}
+
+function inferImageMimeType(filePath: string) {
+  const extension = extname(filePath).toLowerCase()
+  return IMAGE_MIME_BY_EXTENSION[extension] || 'image/png'
+}
+
+function normalizeUtteranceText(input: string) {
+  const compact = input.replace(/\s+/g, ' ').trim()
+
+  if (!compact) {
+    return ''
+  }
+
+  if (compact.includes('```')) {
+    return ''
+  }
+
+  if (/(?:\/[^\s/]+){3,}/.test(compact)) {
+    return ''
+  }
+
+  const normalized = compact.replace(/\r?\n+/g, ' ')
+  let output = ''
+
+  for (const char of normalized) {
+    const next = `${output}${char}`
+    if (next.length > 32 || Buffer.byteLength(next, 'utf8') > 80) {
+      break
+    }
+    output = next
+  }
+
+  if (!output) {
+    return ''
+  }
+
+  if (output.length < normalized.length) {
+    output = `${output}…`
+  }
+
+  return output
+}
+
+function shouldBypassUtteranceThrottle(payload: DesktopUtterancePayload) {
+  if (payload.kind === 'approval' || payload.kind === 'failed') {
+    return true
+  }
+
+  if (payload.kind === 'waiting' && payload.priority !== 'normal') {
+    return true
+  }
+
+  return false
+}
+
+function emitDesktopUtterance(payload: DesktopUtterancePayload) {
+  if (!petManager || appSettings.muted) {
+    return
+  }
+
+  const normalizedText = normalizeUtteranceText(payload.text)
+  if (!normalizedText) {
+    return
+  }
+
+  const now = Date.now()
+
+  if (!shouldBypassUtteranceThrottle(payload)) {
+    const fingerprint = `${payload.kind}|${payload.sessionKey || ''}|${normalizedText}`
+    const lastSeenAt = utteranceFingerprintThrottle.get(fingerprint) ?? 0
+
+    if (now - lastSeenAt < DESKTOP_UTTERANCE_FINGERPRINT_WINDOW_MS) {
+      return
+    }
+
+    utteranceFingerprintThrottle.set(fingerprint, now)
+
+    if (payload.kind === 'progress') {
+      const sessionKey = payload.sessionKey || '__global__'
+      const lastProgressAt = utteranceProgressBySession.get(sessionKey) ?? 0
+      if (now - lastProgressAt < DESKTOP_UTTERANCE_PROGRESS_INTERVAL_MS) {
+        return
+      }
+      utteranceProgressBySession.set(sessionKey, now)
+    }
+  }
+
+  const targetPetId = petManager.resolveUtteranceTargetPetId(payload.sessionKey)
+  if (!targetPetId) {
+    return
+  }
+
+  const command: AppCommand = {
+    type: 'desktop-utterance',
+    utterance: {
+      ...payload,
+      text: normalizedText
+    }
+  }
+
+  petManager.sendToPetById(targetPetId, command)
+}
+
+function isSummaryCandidate(text: string) {
+  if (!text || text.includes('```')) {
+    return false
+  }
+
+  if (text.length > 80) {
+    return false
+  }
+
+  if (/(?:\/[^\s/]+){3,}/.test(text)) {
+    return false
+  }
+
+  return !/\b(traceback|exception|stack|npm err|error:)\b/i.test(text)
+}
+
+function routeDesktopUtterances(snapshot: OpenClawSnapshot) {
+  const previous = previousUtteranceSnapshot
+  const previousApprovalIds = new Set(previous?.approvals.map((approval) => approval.id) || [])
+
+  for (const approval of snapshot.approvals) {
+    if (previousApprovalIds.has(approval.id)) {
+      continue
+    }
+
+    emitDesktopUtterance({
+      sessionKey: approval.sessionKey,
+      text: approval.command || '有新的审批请求需要你确认。',
+      kind: 'approval',
+      priority: 'critical',
+      durationMs: 5600,
+      canCopy: true,
+      canExpand: true
+    })
+  }
+
+  const hasNewError = Boolean(snapshot.lastError && snapshot.lastError !== previous?.lastError)
+
+  if (hasNewError) {
+    emitDesktopUtterance({
+      sessionKey: snapshot.activeRun?.sessionKey || snapshot.activeSessionKey,
+      text: snapshot.lastError,
+      kind: 'failed',
+      priority: 'critical',
+      durationMs: 6200,
+      canCopy: true,
+      canExpand: true
+    })
+  }
+
+  if (previous?.activeRun && !snapshot.activeRun && !hasNewError) {
+    emitDesktopUtterance({
+      sessionKey: previous.activeRun.sessionKey,
+      text: previous.activeRun.label || '任务已经完成。',
+      kind: 'done',
+      priority: 'important',
+      durationMs: 4200,
+      canCopy: true,
+      canExpand: true
+    })
+  }
+
+  if (
+    snapshot.activeRun &&
+    snapshot.activeRun.phase === 'waiting' &&
+    previous?.activeRun?.phase !== 'waiting'
+  ) {
+    emitDesktopUtterance({
+      sessionKey: snapshot.activeRun.sessionKey,
+      text: snapshot.activeRun.label || '正在等待你的处理。',
+      kind: 'waiting',
+      priority: 'normal',
+      durationMs: 4200,
+      canCopy: false,
+      canExpand: true
+    })
+  }
+
+  if (
+    snapshot.activeRun &&
+    previous?.activeRun &&
+    snapshot.activeRun.runId === previous.activeRun.runId &&
+    snapshot.activeRun.label !== previous.activeRun.label
+  ) {
+    emitDesktopUtterance({
+      sessionKey: snapshot.activeRun.sessionKey,
+      text: snapshot.activeRun.label || '进展有更新。',
+      kind: 'progress',
+      priority: 'normal',
+      durationMs: 3600,
+      canCopy: true,
+      canExpand: true
+    })
+  }
+
+  const lastAssistantEntry = [...snapshot.transcript]
+    .reverse()
+    .find((entry) => entry.role === 'assistant' && entry.kind === 'text')
+  const previousAssistantEntry = previous
+    ? [...previous.transcript]
+        .reverse()
+        .find((entry) => entry.role === 'assistant' && entry.kind === 'text')
+    : null
+
+  if (
+    lastAssistantEntry &&
+    lastAssistantEntry.id !== previousAssistantEntry?.id &&
+    isSummaryCandidate(lastAssistantEntry.text)
+  ) {
+    emitDesktopUtterance({
+      sessionKey: lastAssistantEntry.sessionKey,
+      text: lastAssistantEntry.text,
+      kind: 'summary',
+      priority: 'normal',
+      durationMs: 3600,
+      canCopy: true,
+      canExpand: true
+    })
+  }
+
+  previousUtteranceSnapshot = {
+    ...snapshot,
+    approvals: [...snapshot.approvals],
+    transcript: [...snapshot.transcript],
+    sessions: [...snapshot.sessions],
+    recentMessages: [...snapshot.recentMessages],
+    nodes: [...snapshot.nodes],
+    presence: [...snapshot.presence],
+    activeRun: snapshot.activeRun ? { ...snapshot.activeRun } : null,
+    liveTranscript: snapshot.liveTranscript ? { ...snapshot.liveTranscript } : null
+  }
 }
 
 function isPetModuleEnabled() {
@@ -326,6 +600,12 @@ function buildTrayMenu() {
       checked: appSettings.soulMode,
       enabled: soulEnabled,
       click: () => toggleSoulMode()
+    },
+    {
+      label: '静音桌面直说',
+      type: 'checkbox',
+      checked: appSettings.muted,
+      click: () => setMuted(!appSettings.muted)
     },
     {
       label: '暂停动作',
@@ -886,6 +1166,12 @@ function toggleSoulMode() {
   savePersistentSettings()
 }
 
+function setMuted(value: boolean) {
+  appSettings.muted = value
+  refreshTrayMenu()
+  savePersistentSettings()
+}
+
 function savePersistentSettings() {
   if (runtimeConfig) {
     void saveAppSettings(runtimeConfig.dataDir, appSettings)
@@ -931,8 +1217,8 @@ function registerIpcHandlers() {
   })
   ipcMain.handle(
     IPC_CHANNELS.gatewaySendMessage,
-    async (_event, payload: { message: string; sessionKey?: string }) => {
-      await getGatewayClient().sendMessage(payload.message, payload.sessionKey)
+    async (_event, payload: GatewaySendMessagePayload) => {
+      await getGatewayClient().sendMessage(payload)
       return gatewaySnapshot
     }
   )
@@ -968,6 +1254,62 @@ function registerIpcHandlers() {
   })
   ipcMain.handle(IPC_CHANNELS.revealWindow, () => {
     petManager?.revealAll()
+  })
+  ipcMain.handle(IPC_CHANNELS.appSetMuted, (_event, payload: { muted: boolean }) => {
+    setMuted(payload.muted)
+    return { ...appSettings }
+  })
+  ipcMain.handle(IPC_CHANNELS.appCopyText, async (_event, text: string) => {
+    try {
+      clipboard.writeText(text)
+      return true
+    } catch {
+      return false
+    }
+  })
+  ipcMain.handle(IPC_CHANNELS.gatewayPickImages, async () => {
+    if (!isGatewayEnabled()) {
+      return []
+    }
+
+    const result = await dialog.showOpenDialog({
+      properties: ['openFile', 'multiSelections'],
+      filters: [
+        { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg', 'heic', 'heif', 'tif', 'tiff'] }
+      ]
+    })
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return []
+    }
+
+    const attachments: GatewayOutgoingAttachment[] = []
+
+    for (const filePath of result.filePaths.slice(0, IMAGE_PICK_MAX_COUNT)) {
+      try {
+        const stats = await readFile(filePath)
+        if (stats.byteLength > IMAGE_PICK_MAX_SIZE_BYTES) {
+          continue
+        }
+
+        const base64 = stats.toString('base64')
+        const mimeType = inferImageMimeType(filePath)
+        const dataUrl = `data:${mimeType};base64,${base64}`
+
+        attachments.push({
+          id: randomUUID(),
+          fileName: basename(filePath),
+          mimeType,
+          contentBase64: base64,
+          previewDataUrl: dataUrl,
+          sizeBytes: stats.byteLength
+        })
+      } catch {
+        // Skip files that can't be read
+      }
+    }
+
+    return attachments
   })
 }
 

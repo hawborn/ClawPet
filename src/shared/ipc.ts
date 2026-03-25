@@ -41,6 +41,8 @@ export interface AppSettings {
   clickThrough: boolean
   paused: boolean
   soulMode: boolean
+  muted: boolean
+  lastActiveSessionKey?: string
 }
 
 export interface PetWindowState {
@@ -98,11 +100,35 @@ export interface GatewaySessionSummary {
   updatedAt?: number
 }
 
+export interface GatewayOutgoingAttachment {
+  id: string
+  fileName: string
+  mimeType: string
+  contentBase64: string
+  previewDataUrl?: string
+  sizeBytes: number
+}
+
+export interface GatewayAttachmentSummary {
+  kind: 'image'
+  fileName?: string
+  mimeType?: string
+  previewDataUrl?: string
+  localId?: string
+}
+
+export interface GatewaySendMessagePayload {
+  message: string
+  sessionKey?: string
+  attachments?: GatewayOutgoingAttachment[]
+}
+
 export interface GatewayMessageSummary {
   id: string
   role: string
   sessionKey: string
   text: string
+  attachments?: GatewayAttachmentSummary[]
   timestamp?: number
 }
 
@@ -119,6 +145,7 @@ export interface GatewayTranscriptEntry {
   role: string
   sessionKey: string
   text: string
+  attachments?: GatewayAttachmentSummary[]
   timestamp?: number
   toolName?: string
 }
@@ -358,16 +385,31 @@ from: TaskLifecyclePhase
 to: TaskLifecyclePhase
 durationMs?: number
 }
+| {
+type: 'desktop-utterance'
+utterance: {
+sessionKey?: string
+text: string
+kind: 'approval' | 'done' | 'failed' | 'waiting' | 'progress' | 'summary'
+priority: 'critical' | 'important' | 'normal'
+durationMs: number
+canCopy: boolean
+canExpand: boolean
+}
+}
 
 export const IPC_CHANNELS = {
   command: 'app:command',
   gatewayAbortRun: 'gateway:abort-run',
   gatewayGetSnapshot: 'gateway:get-snapshot',
   gatewayOpenPanel: 'gateway:open-panel',
+  gatewayPickImages: 'gateway:pick-images',
   gatewayRefresh: 'gateway:refresh',
   gatewayResolveApproval: 'gateway:resolve-approval',
   gatewaySelectSession: 'gateway:select-session',
   gatewaySendMessage: 'gateway:send-message',
+  appCopyText: 'app:copy-text',
+  appSetMuted: 'app:set-muted',
   getSnapshot: 'app:get-snapshot',
   interact: 'app:interact',
   petCycleVariant: 'pet:cycle-variant',

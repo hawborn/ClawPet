@@ -46,16 +46,21 @@ ClawPet displays one or more transparent pixel cats on the desktop edge to do th
 **P1 New Features**:
 - Click pet to quickly switch to corresponding work session
 - Pet display order auto-adjusts with priority changes
+- Desktop utterance cards: pets show brief status messages (approvals, errors, completion, progress)
+- Quick reply from pet: click utterance card to copy text or expand details
+- Mute toggle for desktop utterances in tray menu
 
 ### OpenClaw
 
 - Auto-detects `~/.openclaw/openclaw.json`
 - Direct local Gateway WebSocket connection
 - Reads sessions, recent messages, presence, nodes, pending approvals, and running activities
-- Sends messages to current session
+- Sends messages to current session (with image attachments support)
+- Image picker dialog: select up to 4 images to attach (max 5MB each)
 - Aborts current run
 - Handles `exec.approval.requested`
 - Maps `read / write / edit / exec / tool / job` activities to pet visual feedback
+- Transcript entries can display image attachments with preview
 
 ## Built-in Pets
 
@@ -248,11 +253,11 @@ If continuing forward, worthwhile priorities include:
 - [docs/CP-007-MULTI-SESSION-MAPPING.md](docs/CP-007-MULTI-SESSION-MAPPING.md): Multi-session pet mapping
 - [docs/CP-008-PANEL-IA-COMPLETE.md](docs/CP-008-PANEL-IA-COMPLETE.md): Panel information architecture
 - [docs/CP-009-STATE-LANGUAGE-SPEC.md](docs/CP-009-STATE-LANGUAGE-SPEC.md): Unified state language spec
-- [docs/PROJECT-STATUS.md](docs/PROJECT-STATUS.md): Project status report
+- [docs/core/PROJECT-STATUS.md](docs/core/PROJECT-STATUS.md): Project status report
 
 ### Planning Docs
-- [docs/ROADMAP.md](docs/ROADMAP.md): Product roadmap
-- [docs/CLAWPET-PRD.md](docs/CLAWPET-PRD.md): Product requirements document
+- [docs/core/ROADMAP.md](docs/core/ROADMAP.md): Product roadmap
+- [docs/core/CLAWPET-PRD.md](docs/core/CLAWPET-PRD.md): Product requirements document
 - [docs/STATE-TAXONOMY.md](docs/STATE-TAXONOMY.md): State taxonomy
 
 ### Community

@@ -2,6 +2,8 @@ import type {
   AppCommand,
   AppSettings,
   GatewayApprovalDecision,
+  GatewayOutgoingAttachment,
+  GatewaySendMessagePayload,
   OpenClawSnapshot,
   PetVariantId,
   PetSnapshot
@@ -16,6 +18,7 @@ const desktopPet = {
   endPetDrag: () => ipcRenderer.send(IPC_CHANNELS.petDragEnd),
   getGatewaySnapshot: () =>
     ipcRenderer.invoke(IPC_CHANNELS.gatewayGetSnapshot) as Promise<OpenClawSnapshot>,
+  copyText: (text: string) => ipcRenderer.invoke(IPC_CHANNELS.appCopyText, text) as Promise<boolean>,
   getSnapshot: () => ipcRenderer.invoke(IPC_CHANNELS.getSnapshot) as Promise<PetSnapshot>,
   interact: () => ipcRenderer.invoke(IPC_CHANNELS.interact) as Promise<void>,
   movePetDrag: (screenX: number, screenY: number) =>
@@ -31,6 +34,8 @@ const desktopPet = {
   openGatewayPanel: () => ipcRenderer.invoke(IPC_CHANNELS.gatewayOpenPanel) as Promise<void>,
   randomizePetVariants: () =>
     ipcRenderer.invoke(IPC_CHANNELS.petRandomizeVariants) as Promise<void>,
+  pickGatewayImages: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.gatewayPickImages) as Promise<GatewayOutgoingAttachment[]>,
   refreshGateway: () => ipcRenderer.invoke(IPC_CHANNELS.gatewayRefresh) as Promise<OpenClawSnapshot>,
   revealWindow: () => ipcRenderer.invoke(IPC_CHANNELS.revealWindow) as Promise<void>,
   resolveGatewayApproval: (id: string, decision: GatewayApprovalDecision) =>
@@ -40,11 +45,8 @@ const desktopPet = {
     }) as Promise<OpenClawSnapshot>,
   selectGatewaySession: (sessionKey: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.gatewaySelectSession, sessionKey) as Promise<OpenClawSnapshot>,
-  sendGatewayMessage: (message: string, sessionKey?: string) =>
-    ipcRenderer.invoke(IPC_CHANNELS.gatewaySendMessage, {
-      message,
-      sessionKey
-    }) as Promise<OpenClawSnapshot>,
+  sendGatewayMessage: (payload: GatewaySendMessagePayload) =>
+    ipcRenderer.invoke(IPC_CHANNELS.gatewaySendMessage, payload) as Promise<OpenClawSnapshot>,
   setAllPetVariant: (variantId: PetVariantId) =>
     ipcRenderer.invoke(IPC_CHANNELS.petSetAllVariant, variantId) as Promise<void>,
   startPetDrag: (screenX: number, screenY: number) =>
@@ -52,7 +54,8 @@ const desktopPet = {
   toggleClickThrough: () =>
     ipcRenderer.invoke(IPC_CHANNELS.toggleClickThrough) as Promise<AppSettings>,
   togglePause: () => ipcRenderer.invoke(IPC_CHANNELS.togglePause) as Promise<AppSettings>,
-  toggleSoulMode: () => ipcRenderer.invoke(IPC_CHANNELS.toggleSoulMode) as Promise<AppSettings>
+  toggleSoulMode: () => ipcRenderer.invoke(IPC_CHANNELS.toggleSoulMode) as Promise<AppSettings>,
+  setMuted: (muted: boolean) => ipcRenderer.invoke(IPC_CHANNELS.appSetMuted, { muted }) as Promise<AppSettings>
 }
 
 contextBridge.exposeInMainWorld('desktopPet', desktopPet)

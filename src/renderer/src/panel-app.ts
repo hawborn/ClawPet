@@ -3,6 +3,8 @@ import type {
   GatewayActiveRun,
   GatewayApprovalDecision,
   GatewayApprovalSummary,
+  GatewayAttachmentSummary,
+  GatewayOutgoingAttachment,
   GatewaySessionSummary,
   GatewayTranscriptEntry,
   OpenClawSnapshot,
@@ -86,6 +88,362 @@ function formatSessionSubtitle(session?: GatewaySessionSummary) {
   return [session.kind, session.lastChannel, relativeTime(session.updatedAt)].filter(Boolean).join(' · ')
 }
 
+const COMPOSER_IMAGE_MAX_COUNT = 4
+const COMPOSER_IMAGE_MAX_SIZE_BYTES = 5 * 1024 * 1024
+
+function createAttachmentId() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+
+  return `paste-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+}
+
+function fileToDataUrl(file: Blob) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result || ''))
+    reader.onerror = () => reject(reader.error || new Error('Failed to read clipboard image'))
+    reader.readAsDataURL(file)
+  })
+}
+
+function inferFileName(file: File, fallbackIndex: number) {
+  if (file.name && file.name.trim().length > 0) {
+    return file.name
+  }
+
+  const extension = (file.type.split('/')[1] || 'png').replace(/[^a-z0-9]+/gi, '') || 'png'
+  return `pasted-image-${Date.now()}-${fallbackIndex}.${extension}`
+}
+
+function dataUrlToBase64(dataUrl: string) {
+  const separatorIndex = dataUrl.indexOf(',')
+  if (separatorIndex === -1) {
+    return ''
+  }
+
+  return dataUrl.slice(separatorIndex + 1)
+}
+
+function isImageClipboardItem(item: DataTransferItem) {
+  return item.kind === 'file' && item.type.startsWith('image/')
+}
+
+function clampAttachmentAppend(
+  existing: GatewayOutgoingAttachment[],
+  incoming: GatewayOutgoingAttachment[]
+): GatewayOutgoingAttachment[] {
+  const availableSlots = Math.max(0, COMPOSER_IMAGE_MAX_COUNT - existing.length)
+  if (availableSlots === 0) {
+    return existing
+  }
+
+  return [...existing, ...incoming.slice(0, availableSlots)]
+}
+
+function hasReachedAttachmentLimit(existing: GatewayOutgoingAttachment[]) {
+  return existing.length >= COMPOSER_IMAGE_MAX_COUNT
+}
+
+function isAttachmentOversized(file: File) {
+  return file.size > COMPOSER_IMAGE_MAX_SIZE_BYTES
+}
+
+function buildPastedAttachment(file: File, dataUrl: string, fallbackIndex: number): GatewayOutgoingAttachment {
+  return {
+    id: createAttachmentId(),
+    fileName: inferFileName(file, fallbackIndex),
+    mimeType: file.type || 'image/png',
+    contentBase64: dataUrlToBase64(dataUrl),
+    previewDataUrl: dataUrl,
+    sizeBytes: file.size
+  }
+}
+
+async function clipboardItemsToAttachments(items: DataTransferItem[]) {
+  const attachments: GatewayOutgoingAttachment[] = []
+
+  for (const [index, item] of items.entries()) {
+    const file = item.getAsFile()
+
+    if (!file || isAttachmentOversized(file)) {
+      continue
+    }
+
+    try {
+      const dataUrl = await fileToDataUrl(file)
+      if (!dataUrl || !dataUrl.startsWith('data:')) {
+        continue
+      }
+
+      attachments.push(buildPastedAttachment(file, dataUrl, index + 1))
+    } catch (error) {
+      console.error('Failed to parse pasted image:', error)
+    }
+  }
+
+  return attachments
+}
+
+function extractClipboardImageItems(event: ClipboardEvent) {
+  const items = event.clipboardData?.items
+  if (!items || items.length === 0) {
+    return []
+  }
+
+  return Array.from(items).filter(isImageClipboardItem)
+}
+
+function resolveComposerSessionKey(textarea: HTMLTextAreaElement, activeSessionKey?: string) {
+  return textarea.dataset.sessionKey || activeSessionKey || ''
+}
+
+function shouldHandleComposerPaste(target: EventTarget | null): target is HTMLTextAreaElement {
+  return target instanceof HTMLTextAreaElement && target.name === 'message'
+}
+
+function canAppendAttachments(sessionKey: string) {
+  return sessionKey.length > 0
+}
+
+function pickAppendableAttachments(
+  existing: GatewayOutgoingAttachment[],
+  incoming: GatewayOutgoingAttachment[]
+): GatewayOutgoingAttachment[] {
+  return clampAttachmentAppend(existing, incoming)
+}
+
+function hasImageClipboardPayload(event: ClipboardEvent) {
+  return extractClipboardImageItems(event).length > 0
+}
+
+function buildPastedAttachments(event: ClipboardEvent) {
+  return clipboardItemsToAttachments(extractClipboardImageItems(event))
+}
+
+function shouldPreventPasteDefault(event: ClipboardEvent) {
+  return hasImageClipboardPayload(event)
+}
+
+function hasAttachmentsAdded(before: GatewayOutgoingAttachment[], after: GatewayOutgoingAttachment[]) {
+  return after.length > before.length
+}
+
+function toAttachmentList(items: GatewayOutgoingAttachment[]) {
+  return items
+}
+
+function appendAttachments(
+  existing: GatewayOutgoingAttachment[],
+  incoming: GatewayOutgoingAttachment[]
+): GatewayOutgoingAttachment[] {
+  return pickAppendableAttachments(existing, incoming)
+}
+
+function normalizePastedAttachments(items: GatewayOutgoingAttachment[]) {
+  return toAttachmentList(items)
+}
+
+function shouldSkipPasteForLimit(existing: GatewayOutgoingAttachment[]) {
+  return hasReachedAttachmentLimit(existing)
+}
+
+function shouldSkipPasteForSession(sessionKey: string) {
+  return !canAppendAttachments(sessionKey)
+}
+
+function preparePastedAttachments(items: GatewayOutgoingAttachment[]) {
+  return normalizePastedAttachments(items)
+}
+
+function resolveIncomingAttachments(items: GatewayOutgoingAttachment[]) {
+  return preparePastedAttachments(items)
+}
+
+function applyAttachmentAppend(
+  existing: GatewayOutgoingAttachment[],
+  incoming: GatewayOutgoingAttachment[]
+): GatewayOutgoingAttachment[] {
+  return appendAttachments(existing, resolveIncomingAttachments(incoming))
+}
+
+function isImagePasteEvent(event: ClipboardEvent) {
+  return shouldPreventPasteDefault(event)
+}
+
+function resolvePastedSessionKey(textarea: HTMLTextAreaElement, activeSessionKey?: string) {
+  return resolveComposerSessionKey(textarea, activeSessionKey)
+}
+
+function parsePastedAttachments(event: ClipboardEvent) {
+  return buildPastedAttachments(event)
+}
+
+function hasPastedAttachmentResult(before: GatewayOutgoingAttachment[], after: GatewayOutgoingAttachment[]) {
+  return hasAttachmentsAdded(before, after)
+}
+
+function finalizeAppendedAttachments(items: GatewayOutgoingAttachment[]) {
+  return items
+}
+
+function mergePastedAttachments(
+  existing: GatewayOutgoingAttachment[],
+  incoming: GatewayOutgoingAttachment[]
+): GatewayOutgoingAttachment[] {
+  return finalizeAppendedAttachments(applyAttachmentAppend(existing, incoming))
+}
+
+function shouldHandlePasteEvent(event: ClipboardEvent) {
+  return isImagePasteEvent(event)
+}
+
+function parseClipboardAttachments(event: ClipboardEvent) {
+  return parsePastedAttachments(event)
+}
+
+function resolveSessionForPaste(textarea: HTMLTextAreaElement, activeSessionKey?: string) {
+  return resolvePastedSessionKey(textarea, activeSessionKey)
+}
+
+function hasAppendChange(before: GatewayOutgoingAttachment[], after: GatewayOutgoingAttachment[]) {
+  return hasPastedAttachmentResult(before, after)
+}
+
+function mergeAttachmentsForPaste(
+  existing: GatewayOutgoingAttachment[],
+  incoming: GatewayOutgoingAttachment[]
+) {
+  return mergePastedAttachments(existing, incoming)
+}
+
+function shouldSkipPaste(event: ClipboardEvent) {
+  return !shouldHandlePasteEvent(event)
+}
+
+function resolvePasteTargetSessionKey(textarea: HTMLTextAreaElement, activeSessionKey?: string) {
+  return resolveSessionForPaste(textarea, activeSessionKey)
+}
+
+function resolvePasteAttachments(event: ClipboardEvent) {
+  return parseClipboardAttachments(event)
+}
+
+function shouldCommitAttachmentAppend(before: GatewayOutgoingAttachment[], after: GatewayOutgoingAttachment[]) {
+  return hasAppendChange(before, after)
+}
+
+function appendPastedAttachments(
+  existing: GatewayOutgoingAttachment[],
+  incoming: GatewayOutgoingAttachment[]
+) {
+  return mergeAttachmentsForPaste(existing, incoming)
+}
+
+function isValidPasteSessionKey(sessionKey: string) {
+  return !shouldSkipPasteForSession(sessionKey)
+}
+
+function canPasteMoreAttachments(existing: GatewayOutgoingAttachment[]) {
+  return !shouldSkipPasteForLimit(existing)
+}
+
+function shouldIgnorePaste(event: ClipboardEvent) {
+  return shouldSkipPaste(event)
+}
+
+function resolveComposerPasteSessionKey(textarea: HTMLTextAreaElement, activeSessionKey?: string) {
+  return resolvePasteTargetSessionKey(textarea, activeSessionKey)
+}
+
+function resolveComposerPasteAttachments(event: ClipboardEvent) {
+  return resolvePasteAttachments(event)
+}
+
+function shouldUpdateComposerAttachments(before: GatewayOutgoingAttachment[], after: GatewayOutgoingAttachment[]) {
+  return shouldCommitAttachmentAppend(before, after)
+}
+
+function mergeComposerAttachments(
+  existing: GatewayOutgoingAttachment[],
+  incoming: GatewayOutgoingAttachment[]
+) {
+  return appendPastedAttachments(existing, incoming)
+}
+
+function isComposerPasteEventIgnored(event: ClipboardEvent) {
+  return shouldIgnorePaste(event)
+}
+
+function isComposerSessionKeyInvalid(sessionKey: string) {
+  return !isValidPasteSessionKey(sessionKey)
+}
+
+function isComposerAttachmentLimitReached(existing: GatewayOutgoingAttachment[]) {
+  return !canPasteMoreAttachments(existing)
+}
+
+function normalizeComposerPastedAttachments(items: GatewayOutgoingAttachment[]) {
+  return items
+}
+
+function updateComposerAttachmentsForPaste(
+  existing: GatewayOutgoingAttachment[],
+  incoming: GatewayOutgoingAttachment[]
+) {
+  return mergeComposerAttachments(existing, normalizeComposerPastedAttachments(incoming))
+}
+
+function shouldApplyComposerAttachmentUpdate(
+  before: GatewayOutgoingAttachment[],
+  after: GatewayOutgoingAttachment[]
+) {
+  return shouldUpdateComposerAttachments(before, after)
+}
+
+function isComposerPasteTarget(target: EventTarget | null): target is HTMLTextAreaElement {
+  return shouldHandleComposerPaste(target)
+}
+
+function resolveClipboardImageAttachments(event: ClipboardEvent) {
+  return resolveComposerPasteAttachments(event)
+}
+
+function resolvePasteSessionKey(textarea: HTMLTextAreaElement, activeSessionKey?: string) {
+  return resolveComposerPasteSessionKey(textarea, activeSessionKey)
+}
+
+function shouldSkipComposerPasteEvent(event: ClipboardEvent) {
+  return isComposerPasteEventIgnored(event)
+}
+
+function shouldSkipComposerPasteForSession(sessionKey: string) {
+  return isComposerSessionKeyInvalid(sessionKey)
+}
+
+function shouldSkipComposerPasteForLimit(existing: GatewayOutgoingAttachment[]) {
+  return isComposerAttachmentLimitReached(existing)
+}
+
+function appendComposerPastedAttachments(
+  existing: GatewayOutgoingAttachment[],
+  incoming: GatewayOutgoingAttachment[]
+) {
+  return updateComposerAttachmentsForPaste(existing, incoming)
+}
+
+function shouldCommitComposerPastedAttachments(
+  before: GatewayOutgoingAttachment[],
+  after: GatewayOutgoingAttachment[]
+) {
+  return shouldApplyComposerAttachmentUpdate(before, after)
+}
+
+function resolveComposerPasteImages(event: ClipboardEvent) {
+  return resolveClipboardImageAttachments(event)
+}
+
 export class OpenClawPanelApp {
   private destroySubscription: (() => void) | null = null
   private lastRenderedSessionKey = ''
@@ -98,6 +456,7 @@ export class OpenClawPanelApp {
   private isScrolling = false
   private scrollStopTimer: NodeJS.Timeout | null = null
   private readonly composerDrafts = new Map<string, string>()
+  private readonly composerAttachments = new Map<string, GatewayOutgoingAttachment[]>()
   private readonly fallbackComposerSessionKey = '__pending-session__'
   private snapshot: OpenClawSnapshot = { ...DEFAULT_GATEWAY_SNAPSHOT }
 
@@ -199,6 +558,27 @@ export class OpenClawPanelApp {
       if (action === 'skin-random') {
         void window.desktopPet.randomizePetVariants()
       }
+
+      if (action === 'pick-images') {
+        void this.handlePickImages()
+        return
+      }
+
+      if (action === 'remove-attachment') {
+        const attachmentId = actionTarget.dataset.attachmentId
+        if (attachmentId) {
+          this.removeComposerAttachment(attachmentId)
+        }
+        return
+      }
+
+      if (action === 'copy-text') {
+        const text = actionTarget.dataset.text
+        if (text) {
+          void window.desktopPet.copyText(text)
+        }
+        return
+      }
     })
 
     this.root.addEventListener('input', (event) => {
@@ -210,6 +590,19 @@ export class OpenClawPanelApp {
 
       const sessionKey = target.dataset.sessionKey || this.snapshot.activeSessionKey
       this.setComposerDraft(sessionKey, target.value)
+    })
+
+    this.root.addEventListener('paste', (event) => {
+      if (!(event instanceof ClipboardEvent)) {
+        return
+      }
+
+      const target = event.target
+      if (!isComposerPasteTarget(target)) {
+        return
+      }
+
+      void this.handleComposerPaste(event, target)
     })
 
     this.root.addEventListener('keydown', (event) => {
@@ -251,16 +644,18 @@ export class OpenClawPanelApp {
       const textarea = event.target.querySelector<HTMLTextAreaElement>('textarea[name="message"]')
       const sessionKey = textarea?.dataset.sessionKey || this.snapshot.activeSessionKey
       const message = textarea?.value.trim() || ''
+      const attachments = this.getComposerAttachments(sessionKey)
 
-      if (!message || !this.snapshot.connected || !sessionKey) {
+      if ((!message && attachments.length === 0) || !this.snapshot.connected || !sessionKey) {
         return
       }
 
-      void window.desktopPet.sendGatewayMessage(message, sessionKey)
+      void window.desktopPet.sendGatewayMessage({ message, sessionKey, attachments })
       if (textarea) {
         textarea.value = ''
         this.setComposerDraft(sessionKey, '')
       }
+      this.clearComposerAttachments(sessionKey)
     })
   }
 
@@ -410,11 +805,23 @@ export class OpenClawPanelApp {
                 ? '你'
                 : 'OpenClaw'
 
+    const attachmentsMarkup = entry.attachments
+      ? entry.attachments
+          .map((attachment) => this.renderAttachment(attachment, entry.role === 'user'))
+          .join('')
+      : ''
+
+    const copyButton =
+      entry.role === 'assistant' && entry.text && entry.text.length > 20
+        ? `<button class="copy-button" data-action="copy-text" data-text="${escapeHtml(entry.text)}" title="复制文本">📋</button>`
+        : ''
+
     return `
       <div class="timeline-item ${roleClass} transcript-${entry.kind}">
         <div class="timeline-rail"><span class="timeline-dot"></span></div>
         <article class="message-bubble ${roleClass} transcript-${entry.kind}">
-          <header>${escapeHtml(kindLabel)} <span>${relativeTime(entry.timestamp)}</span></header>
+          <header>${escapeHtml(kindLabel)} <span>${relativeTime(entry.timestamp)}</span>${copyButton}</header>
+          ${attachmentsMarkup}
           <p>${escapeHtml(entry.text)}</p>
         </article>
       </div>
@@ -493,6 +900,111 @@ export class OpenClawPanelApp {
 
   private getComposerDraft(sessionKey?: string) {
     return this.composerDrafts.get(this.getComposerDraftKey(sessionKey)) || ''
+  }
+
+  private getComposerAttachments(sessionKey?: string): GatewayOutgoingAttachment[] {
+    const key = this.getComposerDraftKey(sessionKey)
+    return this.composerAttachments.get(key) || []
+  }
+
+  private setComposerAttachments(sessionKey: string | undefined, attachments: GatewayOutgoingAttachment[]) {
+    const key = this.getComposerDraftKey(sessionKey)
+    if (attachments.length === 0) {
+      this.composerAttachments.delete(key)
+    } else {
+      this.composerAttachments.set(key, attachments)
+    }
+    this.render()
+  }
+
+  private clearComposerAttachments(sessionKey?: string) {
+    const key = this.getComposerDraftKey(sessionKey)
+    this.composerAttachments.delete(key)
+  }
+
+  private removeComposerAttachment(attachmentId: string) {
+    const sessionKey = this.snapshot.activeSessionKey
+    const attachments = this.getComposerAttachments(sessionKey)
+    const filtered = attachments.filter((a) => a.id !== attachmentId)
+    this.setComposerAttachments(sessionKey, filtered)
+  }
+
+  private async handlePickImages() {
+    try {
+      const attachments = await window.desktopPet.pickGatewayImages()
+      if (attachments.length > 0) {
+        const sessionKey = this.snapshot.activeSessionKey
+        const existing = this.getComposerAttachments(sessionKey)
+        const merged = clampAttachmentAppend(existing, attachments)
+
+        if (merged.length > existing.length) {
+          this.setComposerAttachments(sessionKey, merged)
+        }
+      }
+    } catch (error) {
+      console.error('Failed to pick images:', error)
+    }
+  }
+
+  private async handleComposerPaste(event: ClipboardEvent, textarea: HTMLTextAreaElement) {
+    if (shouldSkipComposerPasteEvent(event)) {
+      return
+    }
+
+    const sessionKey = resolvePasteSessionKey(textarea, this.snapshot.activeSessionKey)
+    if (shouldSkipComposerPasteForSession(sessionKey)) {
+      return
+    }
+
+    const existing = this.getComposerAttachments(sessionKey)
+    if (shouldSkipComposerPasteForLimit(existing)) {
+      return
+    }
+
+    event.preventDefault()
+
+    const pasted = await resolveComposerPasteImages(event)
+    if (pasted.length === 0) {
+      return
+    }
+
+    const merged = appendComposerPastedAttachments(existing, pasted)
+    if (!shouldCommitComposerPastedAttachments(existing, merged)) {
+      return
+    }
+
+    this.setComposerAttachments(sessionKey, merged)
+  }
+
+  private renderAttachment(attachment: GatewayAttachmentSummary, isUserMessage: boolean): string {
+    if (attachment.kind === 'image' && attachment.previewDataUrl) {
+      return `
+        <div class="attachment-preview ${isUserMessage ? 'user-attachment' : 'assistant-attachment'}">
+          <img src="${escapeHtml(attachment.previewDataUrl)}" alt="${escapeHtml(attachment.fileName || '图片')}" />
+        </div>
+      `
+    }
+    return ''
+  }
+
+  private renderComposerAttachments(sessionKey: string): string {
+    const attachments = this.getComposerAttachments(sessionKey)
+    if (attachments.length === 0) {
+      return ''
+    }
+
+    const attachmentItems = attachments
+      .map(
+        (attachment) => `
+      <div class="composer-attachment-item">
+        <img src="${escapeHtml(attachment.previewDataUrl || '')}" alt="${escapeHtml(attachment.fileName)}" />
+        <button type="button" class="remove-attachment" data-action="remove-attachment" data-attachment-id="${escapeHtml(attachment.id)}" title="移除附件">✕</button>
+      </div>
+    `
+      )
+      .join('')
+
+    return `<div class="composer-attachments">${attachmentItems}</div>`
   }
 
   private render() {
@@ -701,6 +1213,7 @@ export class OpenClawPanelApp {
                 <strong>直接对当前会话说话</strong>
                 <span>${escapeHtml(activeRunForSession ? runActivityLabel(activeRunForSession.activityKind) : 'Enter 发送，Shift+Enter 换行')}</span>
               </div>
+              ${this.renderComposerAttachments(activeSessionKey)}
               <textarea
                 name="message"
                 data-session-key="${escapeHtml(activeSessionKey)}"
@@ -712,6 +1225,7 @@ export class OpenClawPanelApp {
                 )}"
               ></textarea>
               <div class="composer-actions">
+                <button type="button" data-action="pick-images" class="attachment-button" ${canSend ? '' : 'disabled'}>📎 添加图片</button>
                 <button type="submit" class="primary" ${canSend ? '' : 'disabled'}>发送</button>
                 <button type="button" data-action="abort" ${activeRunForSession ? '' : 'disabled'}>停止</button>
                 <button type="button" data-action="refresh">刷新</button>

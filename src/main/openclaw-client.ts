@@ -11,10 +11,13 @@ import {
   type GatewayActiveRun,
   type GatewayApprovalDecision,
   type GatewayApprovalSummary,
+  type GatewayAttachmentSummary,
   type GatewayConnectionState,
   type GatewayMessageSummary,
   type GatewayNodeSummary,
+  type GatewayOutgoingAttachment,
   type GatewayPresenceSummary,
+  type GatewaySendMessagePayload,
   type GatewaySessionSummary,
   type GatewaySource,
   type GatewayTranscriptEntry,
@@ -161,6 +164,10 @@ function normalizeMessageText(content: unknown): string {
         parts.push(`[tool:${toolName}]`)
       }
     }
+
+    if (type === 'image') {
+      parts.push('[图片]')
+    }
   }
 
   return parts.join('\n').trim()
@@ -298,6 +305,34 @@ function normalizeTranscriptEntries(
           text,
           timestamp,
           toolName
+        })
+        return
+      }
+
+      if (type === 'image') {
+        const imageId = normalizeTrimmedString(record.imageId) || normalizeTrimmedString(record.id)
+        const mimeType = normalizeTrimmedString(record.mimeType) || 'image/png'
+        const dataUrl = normalizeTrimmedString(record.dataUrl) || normalizeTrimmedString(record.url)
+        const fileName = normalizeTrimmedString(record.fileName) || normalizeTrimmedString(record.name)
+
+        const attachments: GatewayAttachmentSummary[] = [
+          {
+            kind: 'image',
+            fileName,
+            mimeType,
+            previewDataUrl: dataUrl,
+            localId: imageId
+          }
+        ]
+
+        transcript.push({
+          id: `${sessionKey}-${messageIndex}-${partIndex}-image`,
+          kind: 'text',
+          role,
+          sessionKey,
+          text: '[图片]',
+          attachments,
+          timestamp
         })
       }
     })
@@ -633,35 +668,62 @@ export class OpenClawGatewayClient {
     await this.refreshCoreData()
   }
 
-  async sendMessage(message: string, sessionKey?: string) {
-    const targetSessionKey = (sessionKey || this.snapshot.activeSessionKey).trim()
+  async sendMessage(payload: GatewaySendMessagePayload) {
+    const targetSessionKey = (payload.sessionKey || this.snapshot.activeSessionKey).trim()
 
     if (!targetSessionKey) {
       throw new Error('No active OpenClaw session selected')
     }
 
-    const payload = await this.request<{ runId: string }>('chat.send', {
+    const messageParts: Array<Record<string, unknown>> = []
+    messageParts.push({ type: 'text', text: payload.message })
+
+    if (payload.attachments && payload.attachments.length > 0) {
+      for (const attachment of payload.attachments) {
+        messageParts.push({
+          type: 'image',
+          imageId: attachment.id,
+          fileName: attachment.fileName,
+          mimeType: attachment.mimeType,
+          data: attachment.contentBase64,
+          dataUrl: attachment.previewDataUrl
+        })
+      }
+    }
+
+    const response = await this.request<{ runId: string }>('chat.send', {
       sessionKey: targetSessionKey,
-      message,
+      message: messageParts,
       idempotencyKey: `clawpet-${Date.now()}-${randomUUID()}`
     })
 
     const startedAt = Date.now()
+    const attachments: GatewayAttachmentSummary[] =
+      payload.attachments?.map((attachment) => ({
+        kind: 'image' as const,
+        fileName: attachment.fileName,
+        mimeType: attachment.mimeType,
+        previewDataUrl: attachment.previewDataUrl,
+        localId: attachment.id
+      })) ?? []
+
     const optimisticUserEntry: GatewayTranscriptEntry = {
       id: `local-user-${startedAt}`,
       kind: 'text',
       role: 'user',
       sessionKey: targetSessionKey,
-      text: message,
+      text: payload.message,
+      attachments: attachments.length > 0 ? attachments : undefined,
       timestamp: startedAt
     }
+
     this.snapshot = {
       ...this.snapshot,
       activeSessionKey: targetSessionKey,
       lastEventAt: startedAt,
       transcript: [...this.snapshot.transcript, optimisticUserEntry].slice(-TRANSCRIPT_LIMIT),
       liveTranscript: {
-        id: `live-${normalizeTrimmedString(payload.runId) || randomUUID()}`,
+        id: `live-${normalizeTrimmedString(response.runId) || randomUUID()}`,
         kind: 'status',
         role: 'assistant',
         sessionKey: targetSessionKey,
@@ -673,7 +735,7 @@ export class OpenClawGatewayClient {
       activityKind: 'write',
       label: '等待 OpenClaw 回复',
       phase: 'started',
-      runId: normalizeTrimmedString(payload.runId) || randomUUID(),
+      runId: normalizeTrimmedString(response.runId) || randomUUID(),
       sessionKey: targetSessionKey,
       startedAt,
       stream: 'chat',

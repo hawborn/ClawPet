@@ -223,6 +223,14 @@ export class PetManager {
     })
   }
 
+  setMuted(nextValue: boolean) {
+    this.settings.muted = nextValue
+    this.broadcast({
+      type: 'sync-settings',
+      settings: { ...this.settings }
+    })
+  }
+
   setSoulMode(nextValue: boolean) {
     this.settings.soulMode = nextValue
     this.broadcast({
@@ -555,6 +563,35 @@ export class PetManager {
         pet.window.webContents.send(IPC_CHANNELS.command, command)
       }
     }
+  }
+
+  sendToPetById(petId: string, command: AppCommand) {
+    const pet = this.findPetById(petId)
+
+    if (!pet || pet.window.isDestroyed()) {
+      return false
+    }
+
+    pet.window.webContents.send(IPC_CHANNELS.command, command)
+    return true
+  }
+
+  resolveUtteranceTargetPetId(sessionKey?: string) {
+    const normalizedSessionKey = sessionKey?.trim() || ''
+
+    if (normalizedSessionKey) {
+      const boundPet = this.pets.find((pet) => pet.sessionBinding?.sessionKey === normalizedSessionKey)
+      if (boundPet) {
+        return boundPet.id
+      }
+    }
+
+    const highPriorityPet = this.pets.find((pet) => pet.priorityInfo?.priority === 'high')
+    if (highPriorityPet) {
+      return highPriorityPet.id
+    }
+
+    return this.pets[0]?.id ?? null
   }
 
   private clampPetsToDisplay() {
