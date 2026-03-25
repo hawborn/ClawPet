@@ -502,6 +502,28 @@ function loadRendererPage(window: BrowserWindow, search = '') {
   })
 }
 
+function attachPanelContextMenu(targetWindow: BrowserWindow) {
+  targetWindow.webContents.on('context-menu', (_event, params) => {
+    const hasSelection = params.selectionText.trim().length > 0
+    const template: Electron.MenuItemConstructorOptions[] = params.isEditable
+      ? [
+          { role: 'undo', enabled: params.editFlags.canUndo },
+          { role: 'redo', enabled: params.editFlags.canRedo },
+          { type: 'separator' },
+          { role: 'cut', enabled: params.editFlags.canCut },
+          { role: 'copy', enabled: params.editFlags.canCopy || hasSelection },
+          { role: 'paste', enabled: params.editFlags.canPaste },
+          { role: 'selectAll', enabled: params.editFlags.canSelectAll }
+        ]
+      : [
+          { role: 'copy', enabled: params.editFlags.canCopy || hasSelection },
+          { role: 'selectAll', enabled: params.editFlags.canSelectAll }
+        ]
+
+    Menu.buildFromTemplate(template).popup({ window: targetWindow })
+  })
+}
+
 function buildTrayMenu() {
   const petsEnabled = isPetModuleEnabled()
   const gatewayEnabled = isGatewayEnabled()
@@ -673,6 +695,7 @@ function createPanelWindow() {
 
   panelWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   attachWindowDiagnostics(panelWindow, 'panel window')
+  attachPanelContextMenu(panelWindow)
   loadRendererPage(panelWindow, 'view=panel')
   return panelWindow
 }

@@ -37,6 +37,14 @@ body {
   color: var(--ink);
 }
 
+.panel-root .transcript-list,
+.panel-root .message-bubble,
+.panel-root .message-bubble p,
+.panel-root .message-bubble header {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
 #app {
   position: relative;
   display: flex;

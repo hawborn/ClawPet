@@ -573,10 +573,7 @@ export class OpenClawPanelApp {
       }
 
       if (action === 'copy-text') {
-        const text = actionTarget.dataset.text
-        if (text) {
-          void window.desktopPet.copyText(text)
-        }
+        void this.handleCopyText(actionTarget)
         return
       }
     })
@@ -812,8 +809,8 @@ export class OpenClawPanelApp {
       : ''
 
     const copyButton =
-      entry.role === 'assistant' && entry.text && entry.text.length > 20
-        ? `<button class="copy-button" data-action="copy-text" data-text="${escapeHtml(entry.text)}" title="复制文本">📋</button>`
+      entry.text.trim().length > 0
+        ? `<button class="copy-button" data-action="copy-text" data-entry-id="${escapeHtml(entry.id)}" title="复制文本">📋</button>`
         : ''
 
     return `
@@ -974,6 +971,56 @@ export class OpenClawPanelApp {
     }
 
     this.setComposerAttachments(sessionKey, merged)
+  }
+
+  private resolveTranscriptText(entryId?: string) {
+    if (!entryId) {
+      return ''
+    }
+
+    const transcriptEntry = this.snapshot.transcript.find((entry) => entry.id === entryId)
+    if (transcriptEntry?.text) {
+      return transcriptEntry.text
+    }
+
+    if (this.snapshot.liveTranscript?.id === entryId) {
+      return this.snapshot.liveTranscript.text || ''
+    }
+
+    return ''
+  }
+
+  private async handleCopyText(actionTarget: HTMLElement) {
+    const entryId = actionTarget.dataset.entryId
+    const text = this.resolveTranscriptText(entryId)
+
+    if (!text.trim()) {
+      return
+    }
+
+    let copied = false
+
+    try {
+      copied = await window.desktopPet.copyText(text)
+    } catch {
+      copied = false
+    }
+
+    if (!copied && navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(text)
+        copied = true
+      } catch {
+        copied = false
+      }
+    }
+
+    const original = actionTarget.textContent || '📋'
+    actionTarget.textContent = copied ? '✅' : '⚠️'
+
+    window.setTimeout(() => {
+      actionTarget.textContent = original
+    }, 900)
   }
 
   private renderAttachment(attachment: GatewayAttachmentSummary, isUserMessage: boolean): string {
