@@ -2,81 +2,194 @@
 
 **中文** | [English](README.md)
 
-一个面向 macOS 的像素桌宠原型，也是 OpenClaw 的轻量桌面交互层。
+ClawPet 是一个面向 macOS 的像素桌宠桌面壳层，用来把 OpenClaw 的运行状态、待审批动作和轻量会话交互，直接搬到桌面上。
 
-ClawPet 会在桌面边缘显示一只或多只透明像素猫，用来做三件事：
+它不是一个“把控制台搬进 Electron”的壳，而是一个围绕桌面陪伴、状态感知、轻交接而设计的 Companion Shell：
 
-- 作为轻量的桌面陪伴
-- 可视化 OpenClaw 的运行状态
-- 承接会话切换、消息发送和审批操作
+- 在桌面边缘常驻像素猫，持续表达会话和任务状态
+- 在面板里承接实时对话、图片发送、审批和切换会话
+- 在审批浮窗里给出快速决策入口
+- 在 Gateway 不可用时退回 soul bridge 文件模式，维持基础状态反馈
 
-> 想直接看“现在怎么用”，请先读 [PLAYBOOK.md](PLAYBOOK.md)。
+> 仓库公开 Markdown 策略：除 `README.md` 与 `README-zh.md` 外，不再保留其他 Markdown 文档。
 
-## 当前形态
+## 当前定位
 
-- **平台**：macOS
-- **技术栈**：Electron + Vite + TypeScript
-- **渲染方式**：原生 Canvas
-- **集成方式**：优先连接 OpenClaw Gateway，失败时可降级到 soul bridge 文件模式
-- **项目阶段**：桌宠原型，重点在“陪伴感 + 状态感知 + 轻交互”
+ClawPet 当前解决的是一个很具体的问题：
 
-## 核心能力
+**让 OpenClaw 从“控制台里的 agent”变成“桌面上可感知、可接手、可快速回应的工作搭子”。**
 
-### 桌宠本体
+对应的产品目标不是做成一个重型 IDE 面板，而是完成这三层能力：
 
-- 每只宠物对应一个独立的透明、无边框、常驻桌面的 Electron 窗口
-- 支持多宠物同时出现，并以独立窗口形式活动
-- 基于像素动画驱动的宠物状态机
-- 点击宠物可触发打招呼动作和互动气泡
-- 内置 3 种配色变体
+- **桌面陪伴**：桌宠持续在桌面上表达运行中的工作状态
+- **状态可视化**：任务、审批、等待、失败、完成都能被及时看见
+- **轻交互承接**：不必回控制台，也能切会话、发消息、批审批、停任务
 
-**P1 新增**：
-- 每只宠物显示对应的会话信息和优先级标记
-- 任务生命周期阶段过渡动画（task-received / thinking / executing / waiting / done / failed）
-- 7 种情感状态映射（excited / focused / concerned / completed / failed 等）
-- 宠物行为与任务阶段同步
+## 现在能做什么
 
-### 桌面交互
+### 桌宠层
 
-- 菜单栏托盘支持添加宠物、移除最后一只、暂停、点击穿透、显示窗口、退出
-- 双击宠物可打开 OpenClaw 控制面板
-- 有待审批请求时可弹出独立审批浮窗
-- 支持完成、失败、长时间等待等提醒反馈
+- 透明、无边框、常驻桌面的 Electron 窗口
+- 支持多宠物并存与自动排布
+- 支持拖拽、点击互动、双击打开面板
+- 内置 6 种像素猫变体：蜜桃猫、薄荷猫、夜空猫、奶油猫、樱花猫、可可猫
+- 支持点击穿透、暂停动作、静音桌面直说
 
-**P1 新增**：
-- 点击宠物可快速切换到对应的工作会话
-- 宠物优先级变化时自动调整显示顺序
-- 桌面直说卡片：宠物展示简短状态消息（审批、错误、完成、进度等）
-- 快捷回复：点击直说卡片可复制文本或展开详情
-- 托盘菜单支持静音桌面直说
+### 状态表达层
 
-### OpenClaw
+- 基于任务生命周期表达状态：`task-received` / `thinking` / `executing` / `waiting` / `needs-human` / `done` / `failed`
+- 将 OpenClaw 的 `read / write / edit / exec / tool / job` 等活动映射为桌宠反馈
+- 宠物可绑定会话并带有优先级信息
+- 桌面直说卡片用于承接短而重要的反馈：审批、完成、失败、等待、进度、摘要
+- 通过节流与静音机制，避免提醒刷屏
+
+### 面板层
+
+当前面板已经是一个明确的工作交接界面，而不是统计面板。它包含：
+
+- **当前最重要任务**：聚焦正在运行的会话动作
+- **待我接球**：聚焦待审批和需要人工接手的事项
+- **实时对话**：查看 transcript、发送消息、停止当前 run
+- **切换会话**：在多个 OpenClaw 会话之间快速切换
+- **像素衣橱**：统一管理宠物换肤
+
+实时对话区目前支持：
+
+- 发送文本消息
+- 发送图片附件
+- 通过文件选择器添加图片
+- 直接粘贴图片到输入框
+- 展示对话中的图片预览
+- 复制 transcript 文本
+- 右键菜单复制 / 粘贴
+- 发送后清空输入框与附件草稿
+
+### 审批层
+
+- 有待审批动作时弹出独立审批浮窗
+- 对命令做基础风险分级
+- 支持拒绝、允许一次、总是允许
+- 可以快速回到主面板继续查看上下文
+
+### OpenClaw 集成层
 
 - 自动探测 `~/.openclaw/openclaw.json`
-- 直接连接本地 Gateway WebSocket
-- 读取会话列表、最近对话、presence、节点、待审批请求和运行活动
-- 发送消息到当前 session（支持图片附件）
-- 图片选择对话框：最多选择 4 张图片附件（单张上限 5MB）
-- 中止当前 run
-- 处理 `exec.approval.requested`
-- 将 `read / write / edit / exec / tool / job` 等活动映射到桌宠视觉反馈
-- 对话记录支持展示图片附件预览
+- 连接本地 Gateway WebSocket
+- 同步会话、presence、节点、审批、活跃 run、transcript
+- 发送消息到当前会话
+- 支持图片附件发送
+- 支持中止当前 run
+- 记录并展示 Gateway 错误信息
 
-## 内置宠物
+### 降级与本地能力
 
-- 蜜桃猫
-- 薄荷猫
-- 夜空猫
+- Gateway 不可用时，可通过 soul bridge 文件模式继续接收基础状态
+- 持久化应用设置：`clickThrough`、`paused`、`soulMode`、`muted`、`lastActiveSessionKey`
+- 持久化宠物阵列与位置
+- 保存 OpenClaw 设备身份与本地运行数据
 
-## 快速开始
+## 最新架构
+
+ClawPet 现在的架构已经比较清晰，核心原则是：
+
+**主进程负责桌面壳层与系统能力，Gateway Client 负责状态源接入，Renderer 负责表达和交互，Shared 层负责统一协议。**
+
+### 架构分层
+
+```text
+src/
+├── main/
+│   ├── index.ts              # 应用入口、窗口管理、Tray、IPC、系统集成
+│   ├── openclaw-client.ts    # Gateway WebSocket 客户端与状态归一化
+│   ├── pet-manager.ts        # 多宠物窗口、布局、会话映射、优先级广播
+│   ├── app-config.ts         # 环境变量与运行配置解析
+│   ├── app-persistence.ts    # 应用设置持久化
+│   ├── pet-lineup-store.ts   # 宠物阵列持久化
+│   └── soul-bridge.ts        # 文件桥接降级模式
+├── preload/
+│   └── index.ts              # 安全 IPC Bridge
+├── renderer/
+│   ├── index.html
+│   └── src/
+│       ├── pet-app.ts        # 桌宠窗口
+│       ├── panel-app.ts      # 对话面板
+│       ├── approval-app.ts   # 审批浮窗
+│       ├── pet-engine.ts     # 像素渲染与动画
+│       └── styles.css        # 统一视觉样式
+└── shared/
+    └── ipc.ts                # 跨进程共享类型与 IPC 协议
+```
+
+### 主进程职责
+
+`src/main/index.ts` 是桌面壳层中枢，负责：
+
+- 创建桌宠窗口、面板窗口、审批窗口
+- 管理托盘菜单与系统行为
+- 管理右键菜单、剪贴板、文件选择器
+- 聚合 Gateway snapshot，并广播给 renderer
+- 分发桌面直说消息
+- 维护节流、错误兜底和窗口诊断
+
+### Gateway Client 职责
+
+`src/main/openclaw-client.ts` 负责把 Gateway 的原始协议转成 ClawPet 内部稳定状态：
+
+- 维护连接状态与重连逻辑
+- 处理 `chat`、`agent`、`approval` 等事件
+- 归一化 transcript、recent messages、active run
+- 发消息、发附件、停止任务、切会话、处理审批
+- 把 Gateway 错误包装为可读错误信息
+
+### 表达层职责
+
+- `pet-app.ts`：负责桌宠本体、桌面直说卡片和基础交互
+- `panel-app.ts`：负责任务卡片、待接球区、实时对话、图片与复制交互
+- `approval-app.ts`：负责独立审批流
+- `pet-manager.ts`：负责多宠物布局、窗口同步和会话映射
+
+### 协议层职责
+
+`src/shared/ipc.ts` 是整个项目的协议中心，统一定义：
+
+- `AppSettings`
+- `OpenClawSnapshot`
+- `GatewaySendMessagePayload`
+- `GatewayTranscriptEntry`
+- `GatewayApprovalSummary`
+- `PetSessionBinding`
+- `PetPriorityInfo`
+- 桌面直说与 IPC channel
+
+## 设计取向
+
+ClawPet 当前设计不是“信息越多越好”，而是遵循下面几个原则：
+
+### 1. Companion First
+
+桌宠先是陪伴与感知层，再是操作入口。它应该像工作搭子，而不是浮在桌面的状态灯。
+
+### 2. 重要信息就地浮现
+
+短而关键的内容优先出现在桌宠卡片、审批浮窗或面板顶部，而不是要求用户回到控制台翻日志。
+
+### 3. 轻操作留在桌面
+
+切会话、回一句话、发图、批审批、停任务，这些高频轻操作应该尽量在桌面上闭环。
+
+### 4. 全部表达共用一份状态源
+
+桌宠、面板、审批浮窗都基于同一个 `OpenClawSnapshot` 和统一状态语言，避免一处更新、一处过时。
+
+## 本地运行
 
 ### 环境要求
 
 - macOS
 - Node.js + npm
-- 如果要体验状态同步和审批交互，需要本地可用的 OpenClaw / QClaw 环境
+- 如需体验完整能力，需要本地 OpenClaw Gateway 可用
 
-### 开发运行
+### 开发启动
 
 ```bash
 npm install
@@ -96,182 +209,70 @@ npm run build
 npm run preview
 ```
 
-构建输出目录：
+## 本地数据与配置
 
-- `out/main`
-- `out/preload`
-- `out/renderer`
-
-## 工作方式
-
-ClawPet 本质上是一个 Electron 桌面应用，负责把 OpenClaw 的运行状态翻译成桌宠行为和桌面交互。
-
-### 架构分层
-
-- `src/main`：Electron 主进程，负责窗口、托盘、IPC、持久化和 Gateway 连接
-- `src/preload`：安全桥接层
-- `src/renderer`：Canvas 桌宠渲染、面板 UI、审批浮窗
-- `src/shared`：主进程与渲染进程共享类型
-
-### 状态流转
-
-1. ClawPet 启动
-2. 探测 OpenClaw / QClaw 配置文件
-3. 尝试连接本地 Gateway
-4. 接收会话、活动、审批等状态更新
-5. 将状态映射为宠物行为、面板内容和审批浮窗
-6. 用户交互后再把指令回传给 Gateway
-
-### 连接状态
-
-ClawPet 目前支持以下连接状态：
-
-- `unconfigured`：未发现 OpenClaw 配置
-- `connecting`：正在连接
-- `connected`：已连接
-- `degraded`：降级模式（使用 soul bridge）
-- `disconnected`：已断开
-- `error`：连接异常
-
-## 灵魂模式与文件桥接
-
-如果 Gateway 暂时不可用，ClawPet 仍然可以退回到文件桥接模式，通过 `soul-state.json` 接收状态更新。
-
-支持的状态语义：
-
-- `idle`
-- `thinking`
-- `coding`
-- `running`
-- `waiting`
-- `error`
-
-### 状态同步脚本
-
-仓库提供了一个辅助脚本：
-
-```bash
-python3 scripts/set_state.py coding "正在实现登录页重构"
-python3 scripts/set_state.py thinking "在分析数据流"
-python3 scripts/set_state.py running "正在跑测试"
-python3 scripts/set_state.py idle "待命中"
-```
-
-它会把状态写入 OpenClaw / QClaw workspace 对应的 `clawpet/soul-state.json`。
-
-如果你想自定义状态文件位置，可以设置环境变量：
-
-```bash
-export CLAWPET_SOUL_STATE_FILE=/your/path/soul-state.json
-```
-
-## 交互说明
-
-- **单击宠物**：触发打招呼动作和气泡
-- **双击宠物**：打开 OpenClaw 面板
-- **审批到来时**：自动弹出独立审批浮窗
-- **菜单栏托盘**：主控制入口
-- **灵魂模式**：优先根据 OpenClaw / QClaw 状态切换行为和氛围
-- **点击穿透**：窗口不拦截鼠标，适合只做陪伴显示
-- **暂停动作**：适合开会、录屏、演示等场景
-
-## 本地数据
-
-ClawPet 会把本地状态保存在 Electron 的 `userData` 目录中。macOS 下通常位于：
+ClawPet 默认使用 Electron `userData` 目录保存本地状态。macOS 下通常位于：
 
 ```bash
 ~/Library/Application Support/ClawPet/
 ```
 
-典型文件结构如下：
+典型内容包括：
 
-```bash
-~/Library/Application Support/ClawPet/
-├── pet-lineup.json         # 宠物布局、皮肤、位置
-├── app-state.json          # 应用设置（点击穿透、暂停、灵魂模式）
-└── openclaw/
-    └── device.json         # 设备身份认证（自动生成）
+```text
+app-state.json       # 应用设置
+pet-lineup.json      # 宠物阵列和位置
+openclaw/device.json # Gateway 设备身份
 ```
 
-如有需要，也可以通过环境变量覆盖默认目录：
+### 常用环境变量
 
+- `CLAWPET_ENABLE_GATEWAY`
+- `CLAWPET_ENABLE_PETS`
+- `CLAWPET_ENABLE_SOUL_BRIDGE`
+- `CLAWPET_STARTUP_LOG`
+- `CLAWPET_MAX_PETS`
+- `CLAWPET_DEFAULT_PETS`
 - `CLAWPET_DATA_DIR`
 - `CLAWPET_LINEUP_FILE`
+- `CLAWPET_SOUL_STATE_FILE`
 
-## 当前版本
+## 当前计划与完成情况
 
-**P1 Companion Credibility ✅ 已完成（2026-03-23）**
+这部分可以直接作为对外汇报口径使用。
 
-ClawPet 现在已成为真正的"桌面搭子"，不仅是状态灯。
+### 当前阶段判断
 
-### P1 核心升级
+**ClawPet 已经完成了“Companion Shell Baseline”的主体能力，正在从“功能补齐”转入“稳定性收口 + 开源整理 + 可交付化”。**
 
-| 功能 | 状态 | 说明 |
-|------|------|------|
-| **CP-006 生命周期仪式感** | ✅ 完成 | 7 个生命周期阶段 + 过渡动画 + 情感映射 |
-| **CP-007 多会话宠物映射** | ✅ 完成 | 宠物代表会话 + 优先级表达 + 空间感 |
-| **CP-008 面板架构重构** | ✅ 完成 | 工作卡片中心 + 信息优先级清晰 |
-| **CP-009 统一状态语言** | ✅ 完成 | 6 个情感状态 + 颜色系统规范 + 动作映射 |
+### 已完成
 
-### 新增能力
+- **桌面壳层**：Electron 多窗口结构、Tray、窗口管理、错误兜底已经稳定
+- **状态接入**：OpenClaw Gateway 连接、重连、snapshot 聚合、soul bridge 降级已完成
+- **桌宠表达**：多宠物、会话映射、生命周期表达、优先级表达、桌面直说已完成
+- **审批闭环**：审批浮窗、风险提示、快速决策已完成
+- **面板闭环**：当前任务、待接球、实时对话、切会话、像素衣橱已完成
+- **实时对话 v1**：文本发送、停止 run、图片附件、图片粘贴、图片预览、文本复制、右键复制粘贴已完成
+- **持久化 v2**：设置持久化与最近活跃会话恢复已完成
+- **仓库整理**：公开文档收敛为双 README 方案，其他 Markdown 不再作为仓库对外文档面出现
 
-- **任务有节奏**：从接收 → 思考 → 执行 → 完成的连贯过程，而不是硬切状态
-- **多会话空间感**：不同宠物代表不同会话，优先级明确，一眼看出哪个最活跃
-- **面板交接中心**：进入面板立即看到最重要的任务和待决策事项，而不是统计数据
-- **统一设计语言**：颜色、动作、文案、提醒形成一致的故事，新增功能有规范可参考
+### 当前进行中
 
-### P0 产品底盘
+- **交互稳定性收口**：继续收口实时对话与面板的边缘交互问题
+- **开源仓库整理**：README、目录边界、公开信息表达正在统一
+- **交付准备**：为后续更顺手地给别人使用做结构和文案收敛
 
-| 功能 | 状态 | 说明 |
-|------|------|------|
-| P0-1 稳定连接与恢复 | ✅ 完成 | 6 层连接状态机 + 自动重连 + 降级支持 |
-| P0-2 本地持久化 | ✅ 完成 | `clickThrough` / `paused` / `soulMode` 持久化 |
-| P0-3 细粒度状态反馈 | ✅ 完成 | 8 种活动类型映射 + 宠物行为优化 |
-| P0-4 审批浮窗增强 | ✅ 完成 | 风险等级 + 命令摘要 + 上下文展示 |
-| P0-5 完成/失败反馈 | ✅ 完成 | 完成 / 失败 / 长时间等待三类反馈 |
+### 下一步计划
 
-## 下一阶段（P2）
+1. **稳定性继续收口**：把实时对话、审批、桌面直说的边缘问题继续磨平
+2. **可交付化**：补齐打包与更明确的使用入口，降低别人接手门槛
+3. **配置外置化**：逐步把宠物定义、文案、行为参数从硬编码走向可配置
+4. **行为扩展**：在现有 Companion Shell 稳定后，再考虑更丰富的宠物行为与交互
 
-如果继续往前做，比较值得优先推进的方向有：
+### 一句话汇报版本
 
-1. **CP-010 Companion Schema 外置化**：把宠物定义、动作、文案抽离为可配置资源
-2. **CP-011 人格/行为包系统**：支持不同风格宠物的差异化行为和语气
-3. **音效系统**：为每个情感状态配置音效反馈
-4. **更丰富的行为**：追随光标、定时提醒、番茄钟等互动模式
-5. **拖拽与物理**：拖拽宠物、回弹、靠边停靠等视觉交互
-6. **打包分发**：生成可安装的 `.dmg`，降低使用门槛
+> ClawPet 目前已经不是一个“会动的状态灯”，而是一个可常驻桌面的 OpenClaw Companion Shell：能看状态、接审批、发消息、发图片、切会话，主体闭环已形成，当前重点转向稳定性收口、开源整理和可交付化。
 
-## 相关文档
+## License
 
-📚 **完整文档导航** → [docs/INDEX.md](docs/INDEX.md)
-
-### 快速开始
-- [PLAYBOOK.md](PLAYBOOK.md)：当前版本推荐玩法
-
-### P1 功能文档
-- [docs/P1-COMPLETION-SUMMARY.md](docs/P1-COMPLETION-SUMMARY.md)：P1 全体完成总结
-- [docs/CP-006-LIFECYCLE-CEREMONY-COMPLETE.md](docs/CP-006-LIFECYCLE-CEREMONY-COMPLETE.md)：生命周期仪式感设计
-- [docs/CP-007-MULTI-SESSION-MAPPING.md](docs/CP-007-MULTI-SESSION-MAPPING.md)：多会话宠物映射
-- [docs/CP-008-PANEL-IA-COMPLETE.md](docs/CP-008-PANEL-IA-COMPLETE.md)：面板信息架构
-- [docs/CP-009-STATE-LANGUAGE-SPEC.md](docs/CP-009-STATE-LANGUAGE-SPEC.md)：统一状态语言规范
-- [docs/PROJECT-STATUS.md](docs/PROJECT-STATUS.md)：项目状态报告
-
-### 规划文档
-- [docs/ROADMAP.md](docs/ROADMAP.md)：产品规划与路线图
-- [docs/CLAWPET-PRD.md](docs/CLAWPET-PRD.md)：产品需求文档
-- [docs/IMPLEMENTATION-BACKLOG.md](docs/IMPLEMENTATION-BACKLOG.md)：实现待办清单
-
-### 社区
-- [CONTRIBUTING.md](CONTRIBUTING.md)：贡献指南
-- [CHANGELOG.md](CHANGELOG.md)：版本记录
-- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)：社区行为准则
-
-## 许可证
-
-![AGPL v3](https://img.shields.io/badge/license-AGPL%20v3-blue.svg)
-
-ClawPet 使用 **AGPL-3.0-only** 许可证。
-
-这意味着你可以在 AGPL 条款下学习、修改和分发代码；如果你分发修改版本，或通过网络向他人提供修改后的服务，需要同时提供对应源代码。
-
-具体条款请以 [LICENSE](LICENSE) 为准。
+ClawPet 使用 `AGPL-3.0-only` 许可证，具体条款见 `LICENSE`。

@@ -123,6 +123,39 @@ function normalizeTrimmedString(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
 }
 
+function normalizeGatewayErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message || 'OpenClaw Gateway 请求失败'
+  }
+
+  if (typeof error === 'string') {
+    return error.trim() || 'OpenClaw Gateway 请求失败'
+  }
+
+  if (error && typeof error === 'object') {
+    const record = error as Record<string, unknown>
+    const directMessage = normalizeTrimmedString(record.message)
+    if (directMessage) {
+      return directMessage
+    }
+
+    const nestedError = record.error
+    if (nestedError && typeof nestedError === 'object') {
+      const nestedMessage = normalizeTrimmedString((nestedError as Record<string, unknown>).message)
+      if (nestedMessage) {
+        return nestedMessage
+      }
+    }
+
+    const code = normalizeTrimmedString(record.code)
+    if (code) {
+      return `OpenClaw Gateway 请求失败 (${code})`
+    }
+  }
+
+  return 'OpenClaw Gateway 请求失败'
+}
+
 function normalizeMessageText(content: unknown): string {
   if (typeof content === 'string') {
     return content.trim()
@@ -675,25 +708,29 @@ export class OpenClawGatewayClient {
       throw new Error('No active OpenClaw session selected')
     }
 
-    const messageParts: Array<Record<string, unknown>> = []
-    messageParts.push({ type: 'text', text: payload.message })
-
-    if (payload.attachments && payload.attachments.length > 0) {
-      for (const attachment of payload.attachments) {
-        messageParts.push({
-          type: 'image',
-          imageId: attachment.id,
+    const message = payload.message.trim()
+    const outgoingAttachments =
+      payload.attachments
+        ?.filter(
+          (attachment) =>
+            Boolean(attachment.fileName) &&
+            Boolean(attachment.mimeType) &&
+            Boolean(attachment.contentBase64)
+        )
+        .map((attachment) => ({
           fileName: attachment.fileName,
           mimeType: attachment.mimeType,
-          data: attachment.contentBase64,
-          dataUrl: attachment.previewDataUrl
-        })
-      }
+          content: attachment.contentBase64
+        })) ?? []
+
+    if (!message && outgoingAttachments.length === 0) {
+      throw new Error('Message must contain text or attachments')
     }
 
     const response = await this.request<{ runId: string }>('chat.send', {
       sessionKey: targetSessionKey,
-      message: messageParts,
+      message,
+      attachments: outgoingAttachments.length > 0 ? outgoingAttachments : undefined,
       idempotencyKey: `clawpet-${Date.now()}-${randomUUID()}`
     })
 
@@ -706,13 +743,14 @@ export class OpenClawGatewayClient {
         previewDataUrl: attachment.previewDataUrl,
         localId: attachment.id
       })) ?? []
+    const optimisticText = message || (attachments.length > 0 ? '[图片]' : '')
 
     const optimisticUserEntry: GatewayTranscriptEntry = {
       id: `local-user-${startedAt}`,
       kind: 'text',
       role: 'user',
       sessionKey: targetSessionKey,
-      text: payload.message,
+      text: optimisticText,
       attachments: attachments.length > 0 ? attachments : undefined,
       timestamp: startedAt
     }
@@ -1008,7 +1046,7 @@ export class OpenClawGatewayClient {
     if (ok) {
       pending.resolve(payload)
     } else {
-      pending.reject(error)
+      pending.reject(new Error(normalizeGatewayErrorMessage(error)))
     }
   }
 

@@ -2,79 +2,193 @@
 
 [中文](README-zh.md) | **English**
 
-A lightweight pixel desktop pet for macOS, and a light-weight desktop interaction layer for OpenClaw.
+ClawPet is a macOS pixel-pet desktop shell for OpenClaw.
 
-ClawPet displays one or more transparent pixel cats on the desktop edge to do three things:
+It turns OpenClaw from "an agent living in a console" into something that can be seen, felt, and handled directly on the desktop:
 
-- Serve as a lightweight desktop companion
-- Visualize OpenClaw's running status
-- Bridge session switching, message sending, and approval operations
+- pixel pets stay on the screen edge as a companion layer
+- a panel handles real-time conversation, session switching, image sending, and transcript review
+- an approval popup handles fast operator decisions
+- a soul bridge fallback keeps basic status feedback alive when Gateway is unavailable
 
-> For a quick guide on how to use it, check out [PLAYBOOK.md](PLAYBOOK.md).
+> Public Markdown policy: only `README.md` and `README-zh.md` remain in the repository.
 
-## Current State
+## Product Position
 
-- **Platform**: macOS
-- **Tech Stack**: Electron + Vite + TypeScript
-- **Rendering**: Native Canvas
-- **Integration**: Connects to OpenClaw Gateway by default, falls back to soul bridge file mode if unavailable
-- **Phase**: Desktop pet prototype, focused on "companionship + state awareness + lightweight interaction"
+ClawPet is not trying to be a full IDE shell.
 
-## Core Features
+Its goal is narrower and more useful:
 
-### Pet Mechanics
+**make OpenClaw feel like a desktop companion shell with visibility, lightweight handoff, and quick interaction.**
 
-- Each pet runs in its own transparent, frameless, always-on-top Electron window
-- Multiple pets can exist simultaneously as independent windows
-- State machine-driven pixel animation system
-- Click pet to trigger greeting action and chat bubble
-- 3 built-in color variants
+That means three things:
 
-**P1 New Features**:
-- Each pet displays session info and priority indicator
-- Task lifecycle phase transition animations (task-received / thinking / executing / waiting / done / failed)
-- 7 emotion states mapped (excited / focused / concerned / completed / failed, etc.)
-- Pet behavior synchronized with task stages
+- **companion presence** on the desktop
+- **state visibility** for runs, waiting, approvals, failure, and completion
+- **lightweight interaction** without constantly going back to the terminal
 
-### Desktop Interaction
+## What It Does Today
 
-- Menu bar tray with controls: add pet, remove last pet, pause, click-through, show window, quit
-- Double-click pet to open OpenClaw control panel
-- Auto pop-up approval window for pending approvals
-- Feedback for completion, failure, and long waits
+### Pet Layer
 
-**P1 New Features**:
-- Click pet to quickly switch to corresponding work session
-- Pet display order auto-adjusts with priority changes
-- Desktop utterance cards: pets show brief status messages (approvals, errors, completion, progress)
-- Quick reply from pet: click utterance card to copy text or expand details
-- Mute toggle for desktop utterances in tray menu
+- transparent frameless Electron pet windows
+- multiple pets with automatic layout
+- drag, click interaction, double-click to open panel
+- 6 built-in variants: Peach, Mint, Midnight, Butter, Sakura, Cocoa
+- click-through, pause, and mute controls
 
-### OpenClaw
+### State Expression Layer
 
-- Auto-detects `~/.openclaw/openclaw.json`
-- Direct local Gateway WebSocket connection
-- Reads sessions, recent messages, presence, nodes, pending approvals, and running activities
-- Sends messages to current session (with image attachments support)
-- Image picker dialog: select up to 4 images to attach (max 5MB each)
-- Aborts current run
-- Handles `exec.approval.requested`
-- Maps `read / write / edit / exec / tool / job` activities to pet visual feedback
-- Transcript entries can display image attachments with preview
+- lifecycle-oriented task expression: `task-received`, `thinking`, `executing`, `waiting`, `needs-human`, `done`, `failed`
+- OpenClaw activity mapping for `read / write / edit / exec / tool / job`
+- per-session pet binding and priority information
+- desktop utterance cards for approvals, progress, failure, completion, waiting, and summaries
+- throttling and mute controls to avoid noisy notifications
 
-## Built-in Pets
+### Panel Layer
 
-- Peach Cat
-- Mint Cat
-- Midnight Cat
+The panel is now a work handoff surface rather than a stats dashboard. It includes:
 
-## Getting Started
+- **Current Most Important Task**
+- **Catch Ball / Needs My Action**
+- **Real-Time Conversation**
+- **Session Switching**
+- **Pixel Wardrobe**
+
+Real-time conversation currently supports:
+
+- text message sending
+- image attachments
+- image picker dialog
+- direct image paste into the composer
+- image previews in transcript
+- transcript text copy
+- right-click copy / paste
+- clearing composer state after successful send
+
+### Approval Layer
+
+- standalone approval popup when operator action is needed
+- lightweight risk classification for commands
+- deny / allow once / allow always
+- fast jump back to the main panel
+
+### OpenClaw Integration Layer
+
+- auto-detects `~/.openclaw/openclaw.json`
+- connects to local Gateway WebSocket
+- syncs sessions, presence, nodes, approvals, active runs, and transcript
+- sends text and image attachments to the active session
+- aborts the current run
+- wraps Gateway failures into readable UI errors
+
+### Fallback and Local State
+
+- file-based soul bridge fallback when Gateway is not available
+- persisted settings: `clickThrough`, `paused`, `soulMode`, `muted`, `lastActiveSessionKey`
+- persisted pet lineup and positions
+- local OpenClaw device identity storage
+
+## Latest Architecture
+
+ClawPet now follows a fairly clear split:
+
+**main process owns the desktop shell and system integration, Gateway client owns state ingestion, renderer owns expression and interaction, shared owns the protocol.**
+
+### Structure
+
+```text
+src/
+├── main/
+│   ├── index.ts              # app entry, windows, tray, IPC, system integration
+│   ├── openclaw-client.ts    # Gateway WebSocket client and state normalization
+│   ├── pet-manager.ts        # multi-pet windows, layout, session mapping
+│   ├── app-config.ts         # runtime config and env parsing
+│   ├── app-persistence.ts    # app settings persistence
+│   ├── pet-lineup-store.ts   # pet lineup persistence
+│   └── soul-bridge.ts        # fallback file bridge
+├── preload/
+│   └── index.ts              # secure IPC bridge
+├── renderer/
+│   ├── index.html
+│   └── src/
+│       ├── pet-app.ts        # pet window
+│       ├── panel-app.ts      # panel UI
+│       ├── approval-app.ts   # approval popup
+│       ├── pet-engine.ts     # pixel renderer and animation
+│       └── styles.css        # shared visual system
+└── shared/
+    └── ipc.ts                # shared types and IPC protocol
+```
+
+### Main Process Responsibilities
+
+`src/main/index.ts` acts as the shell orchestrator:
+
+- creates pet windows, panel window, and approval window
+- owns tray menu and system-facing behavior
+- handles clipboard, file dialog, right-click menus, and IPC
+- aggregates and broadcasts Gateway snapshot updates
+- dispatches desktop utterances
+- keeps error guards and window diagnostics in one place
+
+### Gateway Client Responsibilities
+
+`src/main/openclaw-client.ts` converts raw Gateway protocol into stable app state:
+
+- connection and reconnect lifecycle
+- `chat`, `agent`, and approval event handling
+- transcript and recent-message normalization
+- message sending, image attachments, session switching, abort, approval resolve
+- readable Gateway error wrapping
+
+### Renderer Responsibilities
+
+- `pet-app.ts`: desktop pet, controls, utterance card
+- `panel-app.ts`: task cards, approvals handoff, real-time conversation, images, copy actions
+- `approval-app.ts`: focused approval decision UI
+- `pet-manager.ts`: layout, broadcasts, session-to-pet mapping
+
+### Shared Protocol Responsibilities
+
+`src/shared/ipc.ts` is the single protocol source for:
+
+- `AppSettings`
+- `OpenClawSnapshot`
+- `GatewaySendMessagePayload`
+- `GatewayTranscriptEntry`
+- `GatewayApprovalSummary`
+- `PetSessionBinding`
+- `PetPriorityInfo`
+- desktop utterance payloads and IPC channels
+
+## Design Direction
+
+The current design direction is intentionally opinionated:
+
+### 1. Companion First
+
+The pet should feel like a work companion, not just a status light.
+
+### 2. Important Things Surface In Place
+
+Short and important information should surface on the desktop, in the popup, or at the top of the panel before the user has to dig into logs.
+
+### 3. Keep Lightweight Actions On Desktop
+
+Session switch, quick reply, image send, approval decision, run abort: these frequent actions should stay close to the desktop surface.
+
+### 4. One Shared State Language
+
+Pet windows, panel, and approval popup all derive from the same normalized snapshot so the expression stays consistent.
+
+## Run Locally
 
 ### Requirements
 
 - macOS
 - Node.js + npm
-- (Optional) Local OpenClaw / QClaw environment for state sync and approval interaction
+- local OpenClaw Gateway if you want the full experience
 
 ### Development
 
@@ -83,7 +197,7 @@ npm install
 npm run dev
 ```
 
-### Type Checking
+### Type Check
 
 ```bash
 npm run check
@@ -96,181 +210,70 @@ npm run build
 npm run preview
 ```
 
-Build output:
-- `out/main`
-- `out/preload`
-- `out/renderer`
+## Local Data and Config
 
-## How It Works
-
-ClawPet is an Electron desktop app that translates OpenClaw's running status into pet behavior and desktop interactions.
-
-### Architecture
-
-- `src/main`: Electron main process, handles windows, tray, IPC, persistence, and Gateway connection
-- `src/preload`: Security bridge layer
-- `src/renderer`: Canvas pet rendering, panel UI, approval window
-- `src/shared`: Shared types between main and renderer
-
-### State Flow
-
-1. ClawPet starts
-2. Detects OpenClaw / QClaw config
-3. Attempts local Gateway connection
-4. Receives session, activity, and approval state updates
-5. Translates states into pet behavior, panel content, and approval windows
-6. User interactions send commands back to Gateway
-
-### Connection States
-
-ClawPet supports the following connection states:
-
-- `unconfigured`: OpenClaw config not found
-- `connecting`: Attempting connection
-- `connected`: Connected
-- `degraded`: Fallback mode (using soul bridge)
-- `disconnected`: Disconnected
-- `error`: Connection error
-
-## Soul Mode & File Bridge
-
-If Gateway is temporarily unavailable, ClawPet can fall back to file bridge mode using `soul-state.json` for state updates.
-
-Supported state semantics:
-
-- `idle`
-- `thinking`
-- `coding`
-- `running`
-- `waiting`
-- `error`
-
-### State Sync Script
-
-The repo includes a helper script:
-
-```bash
-python3 scripts/set_state.py coding "Implementing login page refactor"
-python3 scripts/set_state.py thinking "Analyzing data flow"
-python3 scripts/set_state.py running "Running tests"
-python3 scripts/set_state.py idle "Waiting"
-```
-
-It writes state to `clawpet/soul-state.json` in your OpenClaw / QClaw workspace.
-
-To customize the state file location, set environment variable:
-
-```bash
-export CLAWPET_SOUL_STATE_FILE=/your/path/soul-state.json
-```
-
-## Interaction Guide
-
-- **Single click pet**: Trigger greeting action and chat bubble
-- **Double-click pet**: Open OpenClaw panel
-- **Approval arrives**: Auto pop-up approval window
-- **Menu bar tray**: Main control hub
-- **Soul mode**: Behavior and atmosphere based on OpenClaw / QClaw state
-- **Click-through**: Window doesn't intercept mouse, good for companion-only display
-- **Pause action**: Good for meetings, screen recording, presentations
-
-## Local Data
-
-ClawPet stores local state in Electron's `userData` directory. On macOS, typically:
+Default local data is stored in Electron `userData`. On macOS that is typically:
 
 ```bash
 ~/Library/Application Support/ClawPet/
 ```
 
-Typical file structure:
+Typical files:
 
-```bash
-~/Library/Application Support/ClawPet/
-├── pet-lineup.json         # Pet layout, skin, position
-├── app-state.json          # App settings (click-through, pause, soul mode)
-└── openclaw/
-    └── device.json         # Device authentication (auto-generated)
+```text
+app-state.json       # app settings
+pet-lineup.json      # pet lineup and positions
+openclaw/device.json # Gateway device identity
 ```
 
-You can override defaults with environment variables:
+### Common Environment Variables
 
+- `CLAWPET_ENABLE_GATEWAY`
+- `CLAWPET_ENABLE_PETS`
+- `CLAWPET_ENABLE_SOUL_BRIDGE`
+- `CLAWPET_STARTUP_LOG`
+- `CLAWPET_MAX_PETS`
+- `CLAWPET_DEFAULT_PETS`
 - `CLAWPET_DATA_DIR`
 - `CLAWPET_LINEUP_FILE`
+- `CLAWPET_SOUL_STATE_FILE`
 
-## Current Version
+## Current Plan and Progress
 
-**P1 Companion Credibility ✅ Completed (2026-03-23)**
+This section is written so it can also be reused as a status update.
 
-ClawPet is now a true "desktop companion", not just a status light.
+### Current Assessment
 
-### P1 Core Upgrades
+**ClawPet has finished the core Companion Shell baseline and is now moving from feature completion into stabilization, repo cleanup, and deliverability.**
 
-| Feature | Status | Description |
-|---------|--------|-------------|
-| **CP-006 Lifecycle Ceremony** | ✅ Complete | 7 lifecycle stages + transition animations + emotion mapping |
-| **CP-007 Multi-Session Mapping** | ✅ Complete | Pets represent sessions + priority expression + spatial awareness |
-| **CP-008 Panel Architecture** | ✅ Complete | Task-card-centric + clear information hierarchy |
-| **CP-009 Unified State Language** | ✅ Complete | 6 emotion states + color system + action mapping |
+### Completed
 
-### New Capabilities
+- **desktop shell**: Electron multi-window structure, tray, window control, error guards
+- **state ingestion**: Gateway connection, reconnect, snapshot aggregation, soul bridge fallback
+- **pet expression**: multi-pet presence, session mapping, lifecycle expression, priority feedback, desktop utterance
+- **approval loop**: popup, risk cues, fast operator decisions
+- **panel loop**: current task, needs-my-action area, real-time conversation, session switch, wardrobe
+- **real-time conversation v1**: text send, abort run, image send, image paste, preview, transcript copy, right-click copy/paste
+- **persistence v2**: app settings and last active session recovery
+- **repo cleanup direction**: public docs reduced to the two README files
 
-- **Rhythmic tasks**: Coherent progression from receive → think → execute → complete, not hard state switches
-- **Multi-session spatial awareness**: Different pets represent different sessions, clear priority, see at a glance which is active
-- **Panel as decision hub**: Open panel, immediately see most important tasks and pending decisions, not statistics
-- **Unified design language**: Colors, actions, copy, and feedback form a consistent story; new features have patterns to reference
+### In Progress
 
-### P0 Product Foundation
+- **interaction stabilization** around panel and real-time conversation edge cases
+- **open-source repo cleanup** for a clearer public-facing structure
+- **handoff readiness** so the project is easier to share and adopt
 
-| Feature | Status | Description |
-|---------|--------|-------------|
-| P0-1 Stable Connection & Recovery | ✅ Complete | 6-layer connection state machine + auto-reconnect + fallback support |
-| P0-2 Local Persistence | ✅ Complete | `clickThrough` / `paused` / `soulMode` persistence |
-| P0-3 Fine-grained State Feedback | ✅ Complete | 8 activity types mapped + pet behavior optimized |
-| P0-4 Enhanced Approval Window | ✅ Complete | Risk level + command summary + context display |
-| P0-5 Completion/Failure Feedback | ✅ Complete | 3 feedback types: completion / failure / long wait |
+### Next
 
-## Next Phase (P2)
+1. continue smoothing interaction edge cases
+2. improve packaging and delivery ergonomics
+3. externalize companion schema, copy, and behavior parameters over time
+4. add richer behaviors only after the shell remains stable
 
-If continuing forward, worthwhile priorities include:
+### One-Line Status Update
 
-1. **CP-010 Companion Schema Externalization**: Extract pet definitions, actions, text into configurable resources
-2. **CP-011 Personality/Behavior Packs**: Support different pet styles with differentiated behavior and tone
-3. **Sound System**: Sound feedback for each emotion state
-4. **Richer Behaviors**: Follow cursor, scheduled reminders, pomodoro timer, etc.
-5. **Drag & Physics**: Drag pet, bounce, dock to edge, etc.
-6. **Packaging**: Generate installable `.dmg` to lower adoption friction
-
-## Documentation
-
-📚 **Complete Document Navigation** → [docs/INDEX.md](docs/INDEX.md)
-
-### Quick Start
-- [PLAYBOOK.md](PLAYBOOK.md): Current version playbook
-
-### P1 Feature Docs
-- [docs/P1-COMPLETION-SUMMARY.md](docs/P1-COMPLETION-SUMMARY.md): P1 completion summary
-- [docs/CP-006-LIFECYCLE-CEREMONY-COMPLETE.md](docs/CP-006-LIFECYCLE-CEREMONY-COMPLETE.md): Lifecycle ceremony design
-- [docs/CP-007-MULTI-SESSION-MAPPING.md](docs/CP-007-MULTI-SESSION-MAPPING.md): Multi-session pet mapping
-- [docs/CP-008-PANEL-IA-COMPLETE.md](docs/CP-008-PANEL-IA-COMPLETE.md): Panel information architecture
-- [docs/CP-009-STATE-LANGUAGE-SPEC.md](docs/CP-009-STATE-LANGUAGE-SPEC.md): Unified state language spec
-- [docs/core/PROJECT-STATUS.md](docs/core/PROJECT-STATUS.md): Project status report
-
-### Planning Docs
-- [docs/core/ROADMAP.md](docs/core/ROADMAP.md): Product roadmap
-- [docs/core/CLAWPET-PRD.md](docs/core/CLAWPET-PRD.md): Product requirements document
-- [docs/STATE-TAXONOMY.md](docs/STATE-TAXONOMY.md): State taxonomy
-
-### Community
-- [CONTRIBUTING.md](CONTRIBUTING.md): Contribution guide
-- [CHANGELOG.md](CHANGELOG.md): Changelog
-- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md): Code of conduct
+> ClawPet is no longer just an animated status light; it is now a usable OpenClaw desktop companion shell that can show state, catch approvals, send messages and images, and switch sessions, with the current focus shifting to stabilization, repo cleanup, and delivery readiness.
 
 ## License
 
-![AGPL v3](https://img.shields.io/badge/license-AGPL%20v3-blue.svg)
-
-ClawPet uses the **AGPL-3.0-only** license.
-
-This means you can freely learn, modify, and share the code under AGPL terms. If you distribute modifications or provide services through network distribution, you must also provide the corresponding source code.
-
-For full terms, see [LICENSE](LICENSE).
+ClawPet is licensed under `AGPL-3.0-only`. See `LICENSE` for details.

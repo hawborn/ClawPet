@@ -88,6 +88,30 @@ function formatSessionSubtitle(session?: GatewaySessionSummary) {
   return [session.kind, session.lastChannel, relativeTime(session.updatedAt)].filter(Boolean).join(' · ')
 }
 
+function formatInvokeError(error: unknown) {
+  if (error instanceof Error) {
+    return error.message || error.name
+  }
+
+  if (typeof error === 'string') {
+    return error
+  }
+
+  if (error && typeof error === 'object') {
+    const record = error as Record<string, unknown>
+    const message = typeof record.message === 'string' ? record.message : ''
+    if (message) {
+      return message
+    }
+  }
+
+  try {
+    return JSON.stringify(error)
+  } catch {
+    return String(error)
+  }
+}
+
 const COMPOSER_IMAGE_MAX_COUNT = 4
 const COMPOSER_IMAGE_MAX_SIZE_BYTES = 5 * 1024 * 1024
 
@@ -638,22 +662,44 @@ export class OpenClawPanelApp {
       }
 
       event.preventDefault()
-      const textarea = event.target.querySelector<HTMLTextAreaElement>('textarea[name="message"]')
-      const sessionKey = textarea?.dataset.sessionKey || this.snapshot.activeSessionKey
-      const message = textarea?.value.trim() || ''
-      const attachments = this.getComposerAttachments(sessionKey)
+      void this.handleComposerSubmit(event.target)
+    })
+  }
 
-      if ((!message && attachments.length === 0) || !this.snapshot.connected || !sessionKey) {
-        return
-      }
+  private async handleComposerSubmit(form: HTMLFormElement) {
+    const textarea = form.querySelector<HTMLTextAreaElement>('textarea[name="message"]')
+    const sessionKey = textarea?.dataset.sessionKey || this.snapshot.activeSessionKey
+    const message = textarea?.value.trim() || ''
+    const attachments = this.getComposerAttachments(sessionKey)
 
-      void window.desktopPet.sendGatewayMessage({ message, sessionKey, attachments })
+    if ((!message && attachments.length === 0) || !this.snapshot.connected || !sessionKey) {
+      return
+    }
+
+    try {
+      await window.desktopPet.sendGatewayMessage({ message, sessionKey, attachments })
+
       if (textarea) {
         textarea.value = ''
-        this.setComposerDraft(sessionKey, '')
       }
+      this.setComposerDraft(sessionKey, '')
       this.clearComposerAttachments(sessionKey)
-    })
+
+      const visibleComposer = this.root.querySelector<HTMLTextAreaElement>('textarea[name="message"]')
+      if (visibleComposer && this.getComposerDraftKey(visibleComposer.dataset.sessionKey) === this.getComposerDraftKey(sessionKey)) {
+        visibleComposer.value = ''
+      }
+
+      this.render()
+    } catch (error) {
+      const detail = formatInvokeError(error)
+      this.snapshot = {
+        ...this.snapshot,
+        lastError: detail ? `发送失败：${detail}` : '发送失败'
+      }
+      this.render()
+      console.error('Failed to send message:', error)
+    }
   }
 
   private handleCommand(command: AppCommand) {

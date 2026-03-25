@@ -4,6 +4,12 @@ dist
 *.log
 .DS_Store
 
+# Public repo keeps only the two README files as Markdown
+*.md
+*.MD
+!README.md
+!README-zh.md
+
 # 内部开发工具和文件
 .catpaw/
 skills/
